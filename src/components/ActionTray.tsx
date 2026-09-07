@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, CheckCircle2, AlertOctagon, RotateCcw, Trophy, Sparkles, Clock, ArrowRight, Eye } from 'lucide-react';
+import { Send, CheckCircle2, AlertOctagon, RotateCcw, Trophy, Sparkles, Clock, ArrowRight, Eye, Edit3, X } from 'lucide-react';
 import { Player, GamePhase, RoundResolution, GameSettings } from '../types';
 
 interface ActionTrayProps {
@@ -13,6 +13,9 @@ interface ActionTrayProps {
   clueInput: string;
   onChangeClueInput: (val: string) => void;
   onSubmitClue: () => void;
+  onStartEditClue?: () => void;
+  isEditingClue?: boolean;
+  onCancelEditClue?: () => void;
   // Voting
   selectedVoteTargetId: string | null;
   onSelectVoteTarget: (id: string) => void;
@@ -38,6 +41,9 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
   clueInput,
   onChangeClueInput,
   onSubmitClue,
+  onStartEditClue,
+  isEditingClue = false,
+  onCancelEditClue,
   selectedVoteTargetId,
   onSelectVoteTarget,
   onSubmitVote,
@@ -106,16 +112,25 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
 
             return (
               <div>
-                {!activePlayer.hasSubmittedClue ? (
+                {!activePlayer.hasSubmittedClue || isEditingClue ? (
                   <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-display font-extrabold uppercase text-white">
-                            Your Turn: Enter Your Clue
+                          <span className="text-sm font-display font-extrabold uppercase text-white flex items-center gap-1.5">
+                            {isEditingClue ? (
+                              <>
+                                <Edit3 className="w-4 h-4 text-amber-400" />
+                                <span>Editing Your Clue</span>
+                              </>
+                            ) : (
+                              <span>Your Turn: Enter Your Clue</span>
+                            )}
                           </span>
                           <span className="text-xs text-slate-400">
-                            (Give a subtle hint without revealing secret to Chameleon)
+                            {isEditingClue
+                              ? '(You can revise your hint before the last person submits)'
+                              : '(Give a subtle hint without revealing secret to Chameleon)'}
                           </span>
                         </div>
                         <span className="text-xs font-mono font-bold bg-slate-800 text-amber-300 border border-slate-700 px-2 py-0.5 rounded">
@@ -141,27 +156,46 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 self-end md:self-auto">
+                      {isEditingClue && onCancelEditClue && (
+                        <button
+                          type="button"
+                          onClick={onCancelEditClue}
+                          className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-display font-black uppercase tracking-wider text-xs flex items-center gap-1 cursor-pointer transition-colors border border-slate-600"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Cancel</span>
+                        </button>
+                      )}
                       <button
                         onClick={onSubmitClue}
                         disabled={!clueInput.trim()}
                         className="retro-button px-5 py-2.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 disabled:pointer-events-none rounded-lg font-display font-black text-slate-950 uppercase tracking-wider text-xs sm:text-sm flex items-center gap-2 shadow-md cursor-pointer"
                       >
-                        <Send className="w-4 h-4" />
-                        <span>Submit Clue</span>
+                        {isEditingClue ? <CheckCircle2 className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                        <span>{isEditingClue ? 'Update Clue' : 'Submit Clue'}</span>
                       </button>
                     </div>
                   </div>
                 ) : (
                   <div className="p-4 bg-emerald-950/70 border-2 border-emerald-500/80 rounded-xl text-emerald-100 shadow-md">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                        <div>
-                          <span className="font-bold text-sm text-emerald-300">Your clue is locked in: </span>
-                          <span className="font-mono font-black text-sm sm:text-base bg-emerald-900/90 px-2.5 py-0.5 rounded border border-emerald-500 text-yellow-300">
-                            "{activePlayer.clue}"
-                          </span>
-                        </div>
+                        <span className="font-bold text-sm text-emerald-300">Your clue is locked in: </span>
+                        <span className="font-mono font-black text-sm sm:text-base bg-emerald-900/90 px-2.5 py-0.5 rounded border border-emerald-500 text-yellow-300">
+                          "{activePlayer.clue}"
+                        </span>
+                        {!allCluesSubmitted && onStartEditClue && (
+                          <button
+                            type="button"
+                            onClick={onStartEditClue}
+                            className="ml-2 px-3 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg font-display font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-xs cursor-pointer transition-all active:scale-95"
+                            title="Edit your clue before the last person submits"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Edit Clue</span>
+                          </button>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 self-start sm:self-auto">
                         <span className="text-xs font-mono font-bold bg-slate-900/90 text-amber-300 border border-emerald-500/50 px-2.5 py-1 rounded-md">
@@ -187,9 +221,12 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                       ) : (
                         <span className="flex items-center gap-1.5 flex-wrap">
                           <Clock className="w-3.5 h-3.5 text-amber-400 animate-spin shrink-0" />
-                          <span>Waiting for everyone to input their clue before starting the voting section...</span>
+                          <span>Waiting for remaining clues before voting...</span>
                           <span className="text-slate-300 font-medium">
                             (Waiting on: {waitingCluePlayers.map((p) => p.name).join(', ')})
+                          </span>
+                          <span className="text-amber-300/90 text-[11px] ml-1">
+                            • You can edit your clue until the last player submits!
                           </span>
                         </span>
                       )}

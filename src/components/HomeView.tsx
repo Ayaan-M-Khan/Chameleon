@@ -29,12 +29,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onCreateRoom,
   onJoinRoom,
   onOpenRules,
-  defaultRoomId,
+  defaultRoomId = '',
   initialPassword = '',
   initialJoinTab = false,
 }) => {
+  const hasInviteRoom = Boolean(defaultRoomId && defaultRoomId.trim().length > 3);
+
   const [activeTab, setActiveTab] = useState<'create' | 'join'>(
-    initialJoinTab || (defaultRoomId && defaultRoomId.length > 3) ? 'join' : 'create'
+    initialJoinTab || hasInviteRoom ? 'join' : 'create'
   );
   
   // Create Room state
@@ -44,8 +46,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [createPassword, setCreatePassword] = useState('');
   const [hasCustomPassword, setHasCustomPassword] = useState(false);
 
-  // Join Room state
-  const [joinRoomId, setJoinRoomId] = useState(defaultRoomId || '');
+  // Join Room state - empty on normal startup unless invited
+  const [joinRoomId, setJoinRoomId] = useState(hasInviteRoom ? defaultRoomId.trim() : '');
   const [joinPassword, setJoinPassword] = useState(initialPassword || '');
   const [joinName, setJoinName] = useState('Detective');
   const [joinAvatar, setJoinAvatar] = useState('🕵️');
@@ -328,7 +330,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <form onSubmit={handleJoinSubmit} className="p-5 sm:p-8 space-y-6">
             <div className="max-w-xl mx-auto space-y-5">
               {/* Invite Link Detection Notice */}
-              {defaultRoomId && (
+              {hasInviteRoom && defaultRoomId && (
                 <div className="p-3 bg-emerald-950/70 border border-emerald-500/50 rounded-xl flex items-center gap-3 text-xs text-emerald-300">
                   <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
                   <div>
@@ -355,13 +357,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     maxLength={16}
                     className="w-full px-4 py-3.5 bg-slate-900/90 border-2 border-slate-700 rounded-xl text-white placeholder:text-slate-500 font-mono font-bold text-lg uppercase tracking-wider focus:outline-hidden focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
                   />
-                  {defaultRoomId && (
+                  {hasInviteRoom && defaultRoomId && (
                     <button
                       type="button"
                       onClick={() => setJoinRoomId(defaultRoomId)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-mono font-bold border border-slate-600"
                     >
-                      Paste Recent
+                      Paste Invite Code
                     </button>
                   )}
                 </div>

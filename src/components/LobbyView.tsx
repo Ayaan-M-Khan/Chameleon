@@ -48,6 +48,7 @@ interface LobbyViewProps {
   roomId: string;
   onLeaveRoom?: () => void;
   isHost?: boolean;
+  myPlayerId?: string;
 }
 
 export const LobbyView: React.FC<LobbyViewProps> = ({
@@ -66,6 +67,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   roomId,
   onLeaveRoom,
   isHost = true,
+  myPlayerId,
 }) => {
   const [copiedCode, setCopiedCode] = React.useState(false);
   const [copiedInvite, setCopiedInvite] = React.useState(false);
@@ -259,51 +261,70 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             </p>
 
             <div className="space-y-2">
-              {players.map((p, index) => (
-                <div
-                  key={p.id}
-                  className="flex items-center justify-between p-2.5 rounded-lg border-2 border-slate-700/80 bg-slate-800/80 hover:border-slate-600 transition-all"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xl shrink-0">{p.avatar}</span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="text"
-                          value={p.name}
-                          onChange={(e) => onUpdatePlayerName(p.id, e.target.value)}
-                          className="font-bold text-xs sm:text-sm text-white bg-transparent border-b border-transparent hover:border-slate-600 focus:border-emerald-400 focus:outline-hidden px-1"
-                          maxLength={20}
-                        />
-                        {p.isHost && (
-                          <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase">
-                            HOST
-                          </span>
-                        )}
-                        {index === 0 && !p.isHost && (
-                          <span className="text-[10px] bg-emerald-500 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase">
-                            YOU
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[11px] text-slate-400 block px-1">
-                        {p.isHuman ? 'Human Player' : 'Smart AI Bot'}
-                      </span>
-                    </div>
-                  </div>
+              {players.map((p, index) => {
+                const isSelf = p.id === myPlayerId;
+                const canEditName = isSelf || gameMode === 'pass_and_play';
 
-                  {/* Remove button: Host can remove any player/bot, or user can remove bot */}
-                  {(isHost || !p.isHuman) && players.length > 1 && (
-                    <button
-                      onClick={() => onRemovePlayer(p.id)}
-                      className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-slate-700/50 rounded transition-colors cursor-pointer"
-                      title="Remove player"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
+                return (
+                  <div
+                    key={p.id}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border-2 transition-all ${
+                      isSelf
+                        ? 'border-emerald-500/50 bg-slate-800/90 shadow-xs'
+                        : 'border-slate-700/80 bg-slate-800/80 hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xl shrink-0">{p.avatar}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          {canEditName ? (
+                            <div className="relative flex items-center">
+                              <input
+                                type="text"
+                                value={p.name}
+                                onChange={(e) => onUpdatePlayerName(p.id, e.target.value)}
+                                className="font-bold text-xs sm:text-sm text-white bg-slate-900/70 border border-slate-600 hover:border-slate-500 focus:border-emerald-400 focus:outline-hidden rounded px-1.5 py-0.5"
+                                maxLength={20}
+                                title="Click to edit your name"
+                              />
+                            </div>
+                          ) : (
+                            <span className="font-bold text-xs sm:text-sm text-white px-1 truncate select-none">
+                              {p.name}
+                            </span>
+                          )}
+
+                          {p.isHost && (
+                            <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase shrink-0">
+                              HOST
+                            </span>
+                          )}
+                          {isSelf && !p.isHost && (
+                            <span className="text-[10px] bg-emerald-500 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase shrink-0">
+                              YOU
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-400 block px-1">
+                          {p.isHuman ? (isSelf ? 'You (Human)' : 'Human Player') : 'Smart AI Bot'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Remove button: Host can remove any player/bot, or user can remove bot */}
+                    {(isHost || !p.isHuman) && players.length > 1 && !isSelf && (
+                      <button
+                        onClick={() => onRemovePlayer(p.id)}
+                        className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-slate-700/50 rounded transition-colors cursor-pointer"
+                        title="Remove player"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

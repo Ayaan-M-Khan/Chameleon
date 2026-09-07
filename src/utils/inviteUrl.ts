@@ -31,7 +31,8 @@ export function parseInviteUrl(): InviteParams {
   }
 
   const searchParams = new URLSearchParams(window.location.search);
-  const hashRoom = window.location.hash ? window.location.hash.replace('#', '').trim() : null;
+  const rawHash = window.location.hash ? window.location.hash.replace('#', '').trim() : '';
+  const hashRoom = rawHash && (rawHash.startsWith('CHAM-') || rawHash.startsWith('FOX-')) ? rawHash : null;
   
   const roomParam = searchParams.get('room') || searchParams.get('roomId') || hashRoom;
   const pwdParam = searchParams.get('pwd') || searchParams.get('password') || null;

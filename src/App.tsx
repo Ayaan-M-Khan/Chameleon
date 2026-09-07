@@ -130,14 +130,14 @@ export default function App() {
       : 'player-1'
   ).current;
 
-  // Room ID
+  // Room ID: strictly empty on startup unless a valid invite link was provided
   const [roomId, setRoomId] = useState<string>(() => {
     if (inviteInfo.roomId) return inviteInfo.roomId;
     if (typeof window !== 'undefined') {
       const hash = window.location.hash.replace('#', '').trim();
       if (hash && (hash.startsWith('CHAM-') || hash.startsWith('FOX-'))) return hash;
     }
-    return generateRoomId();
+    return '';
   });
 
   // Core Game State
@@ -163,9 +163,20 @@ export default function App() {
 
   // Active inputs
   const [clueInput, setClueInput] = useState('');
+  const [isEditingClue, setIsEditingClue] = useState(false);
   const [selectedVoteTargetId, setSelectedVoteTargetId] = useState<string | null>(null);
   const [selectedGuessWord, setSelectedGuessWord] = useState<string | null>(null);
   const [roundResolution, setRoundResolution] = useState<RoundResolution | null>(null);
+
+  // Single random clue revealed exclusively to the Chameleon during clue_submission
+  const [impostorPeekPlayerId, setImpostorPeekPlayerId] = useState<string | null>(null);
+
+  // Bot timeouts ref for clean lifecycle and pause/resume during clue editing
+  const botTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
+  const clearBotTimeouts = useCallback(() => {
+    botTimeoutsRef.current.forEach((t) => clearTimeout(t));
+    botTimeoutsRef.current = [];
+  }, []);
 
   // Turn timer
   const [timeLeft, setTimeLeft] = useState(60);
@@ -199,12 +210,37 @@ export default function App() {
     sound.enabled = soundEnabled;
   }, [soundEnabled]);
 
-  // Sync room in URL hash
+  // Sync room in URL hash only when a valid room exists, otherwise keep URL clean
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      window.location.hash = roomId;
+      if (roomId) {
+        window.location.hash = roomId;
+      } else if (window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
     }
   }, [roomId]);
+
+  // Chameleon single random clue peek during clue_submission
+  useEffect(() => {
+    if (gamePhase !== 'clue_submission') {
+      if (impostorPeekPlayerId) setImpostorPeekPlayerId(null);
+      return;
+    }
+
+    // Identify players other than the imposter who have submitted their clue
+    const submittedOthers = players.filter(
+      (p) => p.hasSubmittedClue && p.id !== foxPlayerId
+    );
+
+    if (submittedOthers.length > 0) {
+      // Pick exactly ONE at random, and preserve it throughout the clue submission phase
+      if (!impostorPeekPlayerId || !submittedOthers.some((p) => p.id === impostorPeekPlayerId)) {
+        const picked = submittedOthers[Math.floor(Math.random() * submittedOthers.length)].id;
+        setImpostorPeekPlayerId(picked);
+      }
+    }
+  }, [players, foxPlayerId, gamePhase, impostorPeekPlayerId]);
 
   // Setup Realtime WebSocket and BroadcastChannel Sync
   useEffect(() => {
@@ -374,6 +410,9 @@ export default function App() {
 
     setPlayers(updatedPlayers);
     setClueInput('');
+    setIsEditingClue(false);
+    setImpostorPeekPlayerId(null);
+    clearBotTimeouts();
     setSelectedVoteTargetId(null);
     setSelectedGuessWord(null);
     setRoundResolution(null);
@@ -399,7 +438,15 @@ export default function App() {
     }
 
     broadcastState('clue_submission', updatedPlayers, null);
-  }, [selectedCategoryId, players, gameMode, settings.chameleonCount, settings.categoryDeckMode, settings.categoryPool, roomId, broadcastState]);
+
+    // Stagger AI bots with natural timing so human has comfortable time to think & edit clue
+    if (gameMode !== 'pass_and_play') {
+      const hasBots = updatedPlayers.some((p) => !p.isHuman);
+      if (hasBots && (gameMode !== 'room' || isHost)) {
+        processBotClues(updatedPlayers, 3500);
+      }
+    }
+  }, [selectedCategoryId, players, gameMode, settings.chameleonCount, settings.categoryDeckMode, settings.categoryPool, roomId, broadcastState, isHost]);
 
   // Handle Player Management in Lobby
   const handleAddBot = () => {
@@ -442,6 +489,10 @@ export default function App() {
   };
 
   const handleUpdatePlayerName = (id: string, newName: string) => {
+    // Strictly prevent modifying other players' names
+    if (gameMode !== 'pass_and_play' && id !== myPlayerId) {
+      return;
+    }
     const updated = players.map((p) => (p.id === id ? { ...p, name: newName } : p));
     setPlayers(updated);
     if (gameMode === 'room' && roomId) {
@@ -459,6 +510,58 @@ export default function App() {
     });
   };
 
+  // Start editing clue before the last person submits
+  const handleStartEditClue = () => {
+    // If all players have already submitted, editing is locked
+    const unsubmitted = players.filter((p) => !p.hasSubmittedClue);
+    if (unsubmitted.length === 0) return;
+
+    sound.click();
+    setIsEditingClue(true);
+    setClueInput(activePlayer.clue || '');
+    clearBotTimeouts();
+
+    const updated = players.map((p) =>
+      p.id === activePlayer.id
+        ? { ...p, hasSubmittedClue: false, isReady: false }
+        : p
+    );
+    setPlayers(updated);
+
+    if (gameMode === 'room' && roomId) {
+      socketClient.syncState(roomId, { players: updated });
+      broadcastState('clue_submission', updated);
+    }
+  };
+
+  // Cancel editing clue and restore prior submitted clue
+  const handleCancelEditClue = () => {
+    sound.click();
+    setIsEditingClue(false);
+    setClueInput('');
+
+    const updated = players.map((p) =>
+      p.id === activePlayer.id && p.clue
+        ? { ...p, hasSubmittedClue: true, isReady: true }
+        : p
+    );
+    setPlayers(updated);
+
+    if (gameMode === 'room' && roomId) {
+      socketClient.syncState(roomId, { players: updated });
+      broadcastState('clue_submission', updated);
+    }
+
+    if (updated.every((p) => p.hasSubmittedClue)) {
+      transitionToVoting(updated);
+    } else {
+      const hasBots = updated.some((p) => !p.isHuman && !p.hasSubmittedClue);
+      if (hasBots && (gameMode !== 'room' || isHost)) {
+        processBotClues(updated, 1500);
+      }
+    }
+  };
+
   // Submit human player clue
   const handleSubmitClue = () => {
     if (!clueInput.trim()) return;
@@ -466,6 +569,7 @@ export default function App() {
 
     const formattedClue = clueInput.trim();
     const currentActiveId = activePlayer.id;
+    setIsEditingClue(false);
 
     // Update player
     const updated = players.map((p) =>
@@ -499,14 +603,16 @@ export default function App() {
       return;
     }
 
-    // If there are unsubmitted AI bots, trigger their clues
+    // If there are unsubmitted AI bots, trigger their clues with staggered delays
     const hasUnsubmittedBots = updated.some((p) => !p.isHuman && !p.hasSubmittedClue);
     if (hasUnsubmittedBots && (gameMode !== 'room' || isHost)) {
-      processBotClues(updated);
+      processBotClues(updated, 1800);
     }
   };
 
   const autoSubmitCurrentClue = () => {
+    setIsEditingClue(false);
+    clearBotTimeouts();
     // For anyone who hasn't submitted a clue yet, auto-assign
     setPlayers((prev) => {
       const updated = prev.map((p) => {
@@ -525,7 +631,8 @@ export default function App() {
   };
 
   // Simulate AI bots submitting clues
-  const processBotClues = (currentPlayers: Player[]) => {
+  const processBotClues = (currentPlayers: Player[], baseDelay = 1200) => {
+    clearBotTimeouts();
     const unsubmittedBots = currentPlayers.filter((p) => !p.isHuman && !p.hasSubmittedClue);
 
     if (unsubmittedBots.length === 0) {
@@ -537,17 +644,20 @@ export default function App() {
     }
 
     // Stagger bot clues realistically
-    let delay = 400;
-
     unsubmittedBots.forEach((bot, idx) => {
-      setTimeout(() => {
+      const delay = baseDelay + idx * 3000 + Math.floor(Math.random() * 800);
+
+      const t = setTimeout(() => {
         setPlayers((prev) => {
+          const currentBot = prev.find((p) => p.id === bot.id);
+          if (!currentBot || currentBot.hasSubmittedClue) return prev;
+
           const existingClues = prev
             .filter((p) => p.hasSubmittedClue)
             .map((p) => p.clue);
 
           const botClue = generateBotClue(
-            bot,
+            currentBot,
             category,
             secretCoordinate?.item || '',
             existingClues,
@@ -567,9 +677,9 @@ export default function App() {
 
           sound.click();
 
-          // If last bot finished, check if EVERY player has now submitted their clue
-          if (idx === unsubmittedBots.length - 1) {
-            setTimeout(() => {
+          // Check if EVERY player has now submitted their clue
+          if (nextPlayers.every((p) => p.hasSubmittedClue)) {
+            const finishTimer = setTimeout(() => {
               setPlayers((latest) => {
                 // Strict requirement: MUST wait for everyone to input their clue before starting voting section!
                 if (latest.every((p) => p.hasSubmittedClue)) {
@@ -578,12 +688,14 @@ export default function App() {
                 return latest;
               });
             }, 600);
+            botTimeoutsRef.current.push(finishTimer);
           }
 
           return nextPlayers;
         });
       }, delay);
-      delay += 550;
+
+      botTimeoutsRef.current.push(t);
     });
   };
 
@@ -593,6 +705,8 @@ export default function App() {
     if (!finalPlayers.every((p) => p.hasSubmittedClue)) {
       return;
     }
+    clearBotTimeouts();
+    setIsEditingClue(false);
     sound.accuse();
     setGamePhase('voting');
     setSelectedVoteTargetId(null);
@@ -1081,8 +1195,8 @@ export default function App() {
                 onCreateRoom={handleCreateRoom}
                 onJoinRoom={handleJoinRoom}
                 onOpenRules={() => setIsRulesOpen(true)}
-                defaultRoomId={inviteInfo.roomId || roomId}
-                initialPassword={inviteInfo.password || settings.roomPassword || ''}
+                defaultRoomId={inviteInfo.roomId || ''}
+                initialPassword={inviteInfo.password || ''}
                 initialJoinTab={Boolean(inviteInfo.roomId && !inviteInfo.autoJoin)}
               />
             </motion.div>
@@ -1098,6 +1212,7 @@ export default function App() {
             >
               <LobbyView
                 players={players}
+                myPlayerId={myPlayerId}
                 gameMode={gameMode}
                 selectedCategoryId={selectedCategoryId}
                 onSelectCategory={(id) => {
@@ -1136,6 +1251,8 @@ export default function App() {
                   <LeftColumnTable
                     players={players}
                     activePlayerId={activePlayer.id}
+                    activePlayerRole={activePlayer.role}
+                    impostorPeekPlayerId={impostorPeekPlayerId}
                     gamePhase={gamePhase}
                     anonymousVoting={settings.anonymousVoting}
                     canVoteNow={gamePhase === 'voting' && !activePlayer.votedForId}
@@ -1169,6 +1286,9 @@ export default function App() {
                 clueInput={clueInput}
                 onChangeClueInput={setClueInput}
                 onSubmitClue={handleSubmitClue}
+                onStartEditClue={handleStartEditClue}
+                isEditingClue={isEditingClue}
+                onCancelEditClue={handleCancelEditClue}
                 selectedVoteTargetId={selectedVoteTargetId}
                 onSelectVoteTarget={(id) => setSelectedVoteTargetId(id)}
                 onSubmitVote={handleSubmitVote}

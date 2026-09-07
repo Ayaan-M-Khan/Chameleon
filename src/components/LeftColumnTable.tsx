@@ -1,11 +1,13 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Clock, Bot, User, HelpCircle, Eye, EyeOff } from 'lucide-react';
+import { Check, Clock, Bot, User, HelpCircle } from 'lucide-react';
 import { Player, GamePhase } from '../types';
 
 interface LeftColumnTableProps {
   players: Player[];
   activePlayerId: string;
+  activePlayerRole?: 'innocent' | 'fox';
+  impostorPeekPlayerId?: string | null;
   gamePhase: GamePhase;
   anonymousVoting: boolean;
   onSelectVoteTarget?: (targetId: string) => void;
@@ -16,17 +18,20 @@ interface LeftColumnTableProps {
 export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
   players,
   activePlayerId,
+  activePlayerRole = 'innocent',
+  impostorPeekPlayerId = null,
   gamePhase,
   anonymousVoting,
   onSelectVoteTarget,
   selectedVoteTargetId,
   canVoteNow,
 }) => {
-  const [showAllCluesLocally, setShowAllCluesLocally] = React.useState(false);
-
-  // During clue submission, hide others' clues if still writing, or reveal when submitted
-  // When voting or resolution, clues are fully public!
+  // During clue submission:
+  // - Innocents see ONLY their own clue
+  // - Imposter sees their own clue + exactly 1 random other player's clue
+  // When voting or resolution, clues are fully public to all players!
   const isVotingOrResolution = gamePhase === 'voting' || gamePhase === 'fox_guess' || gamePhase === 'round_resolution';
+  const isImpostor = activePlayerRole === 'fox';
 
   // Clues submitted & votes cast counts
   const cluesSubmittedCount = players.filter((p) => p.hasSubmittedClue).length;
@@ -44,15 +49,10 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {gamePhase === 'clue_submission' && (
-            <button
-              onClick={() => setShowAllCluesLocally(!showAllCluesLocally)}
-              className="text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded-lg border border-slate-600 transition-colors"
-              title="Toggle preview visibility of submitted clues"
-            >
-              {showAllCluesLocally ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-              <span className="hidden sm:inline">{showAllCluesLocally ? 'Mask Early Clues' : 'Peek Clues'}</span>
-            </button>
+          {gamePhase === 'clue_submission' && isImpostor && (
+            <span className="text-[11px] font-bold bg-purple-950 text-purple-300 border border-purple-600 px-2 py-0.5 rounded-md flex items-center gap-1">
+              🦎 Chameleon Intel
+            </span>
           )}
 
           {gamePhase === 'clue_submission' ? (
@@ -94,6 +94,18 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
             {players.map((p) => {
               const isCurrent = p.id === activePlayerId;
               const hasClue = Boolean(p.clue && p.hasSubmittedClue);
+              const isImpostorPeekTarget = isImpostor && p.id === impostorPeekPlayerId;
+
+              // Visibility rules:
+              // 1. Voting/Resolution: all clues are public
+              // 2. Clue submission:
+              //    - Current active player always sees their own clue
+              //    - Imposter (Chameleon) sees exactly ONE other player's clue at random
+              //    - Innocents see NO other players' clues
+              const isClueVisible =
+                isVotingOrResolution ||
+                isCurrent ||
+                (gamePhase === 'clue_submission' && isImpostorPeekTarget);
 
               // Voting indicator logic
               const votedTarget = players.find(target => target.id === p.votedForId);
@@ -154,10 +166,20 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                   {/* Word / Clue - Expanded with wrapping and strictly contained */}
                   <td className="py-3 px-2 sm:px-3 align-middle min-w-0 overflow-hidden">
                     {hasClue ? (
-                      // Clue is visible during voting/results, or if it's the current player, or if peek is enabled
-                      isVotingOrResolution || p.id === activePlayerId || showAllCluesLocally ? (
-                        <div className="w-full bg-amber-950/50 border border-amber-500/50 text-amber-200 font-bold px-2.5 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-mono tracking-tight shadow-xs break-words [overflow-wrap:anywhere] [word-break:break-word] whitespace-normal leading-relaxed overflow-hidden">
+                      isClueVisible ? (
+                        <div
+                          className={`w-full ${
+                            isImpostorPeekTarget && gamePhase === 'clue_submission'
+                              ? 'bg-purple-950/70 border-purple-500/80 text-purple-200 shadow-sm'
+                              : 'bg-amber-950/50 border-amber-500/50 text-amber-200'
+                          } border font-bold px-2.5 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-mono tracking-tight shadow-xs break-words [overflow-wrap:anywhere] [word-break:break-word] whitespace-normal leading-relaxed overflow-hidden`}
+                        >
                           "{p.clue}"
+                          {isImpostorPeekTarget && gamePhase === 'clue_submission' && (
+                            <span className="block mt-1 text-[10px] font-sans font-extrabold uppercase tracking-wider text-purple-300">
+                              🦎 Chameleon Intel (1 Clue)
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <div className="inline-flex items-center gap-1 text-slate-400 font-mono text-xs italic bg-slate-900 px-2.5 py-1 rounded-md border border-slate-700">
