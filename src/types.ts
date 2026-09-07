@@ -1,0 +1,80 @@
+export type PlayerRole = 'innocent' | 'fox';
+
+export interface Player {
+  id: string;
+  name: string;
+  isHuman: boolean;
+  isHost: boolean;
+  avatar: string;
+  score: number;
+  role: PlayerRole;
+  clue: string;
+  hasSubmittedClue: boolean;
+  votedForId: string | null;
+  isReady: boolean;
+}
+
+export interface Coordinate {
+  col: 'A' | 'B' | 'C' | 'D';
+  row: 1 | 2 | 3 | 4;
+  colIndex: number; // 0..3
+  rowIndex: number; // 0..3
+  label: string;    // e.g. "C2"
+  item: string;     // e.g. "Queen"
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  bannerColor: string;
+  accentColor: string;
+  description: string;
+  // 16 items in row-major order: Row 1 (A1, B1, C1, D1), Row 2 (A2, B2, C2, D2)...
+  items: string[];
+  // Clue banks for simulated AI players per item
+  clueBank: Record<string, string[]>;
+  // Generic ambiguous / deceptive clues for the Fox
+  foxClueBank: string[];
+}
+
+export interface GameSettings {
+  pointForGuessingFox: boolean;      // 1 bonus point for guessing fox
+  foxSeeOneClueEarly: boolean;       // Fox can peek 1 innocent clue before submitting
+  anonymousVoting: boolean;          // Hide who voted for whom until reveal
+  turnTimer: boolean;                // Turn timer toggle
+  turnTimerSeconds: number;          // Default 60 (e.g. 30, 45, 60, 90, 120)
+  privateGame: boolean;              // Private game toggle
+  roomPassword?: string;             // Optional room passcode / password
+  chameleonCount: number;            // Number of chameleons (1 or 2, default 1)
+  targetScore: number;               // Score to win game (default 5, 0 = Infinite / Endless)
+  innocentCatchPoints: number;       // Points awarded to innocents when chameleon caught (default 2)
+  chameleonEscapePoints: number;     // Points awarded to chameleon if escaping undetected (default 2)
+  chameleonStealPoints: number;      // Points awarded to chameleon if guessing word (default 1)
+  categoryDeckMode?: 'random' | 'select_one' | 'select_random'; // Category selection strategy
+  categoryPool?: string[];           // Selected category IDs for select_random pool
+}
+
+export type GameMode = 'solo' | 'pass_and_play' | 'room';
+
+export type GamePhase =
+  | 'home'
+  | 'lobby'
+  | 'clue_submission'
+  | 'voting'
+  | 'fox_guess'
+  | 'round_resolution';
+
+export interface RoundResolution {
+  winner: 'innocents' | 'fox';
+  reason: 'innocents_caught_fox' | 'fox_stole_win' | 'fox_escaped_undetected';
+  foxPlayerId: string;
+  foxPlayerName: string;
+  accusedPlayerId: string | null;
+  accusedPlayerName: string | null;
+  targetWord: string;
+  targetCoordinate: string;
+  foxGuessWord?: string;
+  foxGuessCoordinate?: string;
+  voteTally: Record<string, number>;
+  pointsAwarded: Record<string, { points: number; explanation: string }>;
+}

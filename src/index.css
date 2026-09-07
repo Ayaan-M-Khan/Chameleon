@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color: #F8FAFC;
+    background-color: #0B0F17;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Sophisticated Dark Theme Grid Background */
+.bg-dark-pattern,
+.bg-gingham-pattern {
+  background-color: #0B0F17;
+  background-image: 
+    radial-gradient(ellipse 70% 40% at 50% -10%, rgba(16, 185, 129, 0.12), transparent),
+    radial-gradient(circle at 100% 100%, rgba(56, 189, 248, 0.06), transparent 45%),
+    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+}
+
+/* Dark Container cards with clean borders and contrast shadows */
+.retro-card {
+  background-color: #131B2E;
+  border: 2px solid #334155;
+  box-shadow: 4px 4px 0px #020617;
+  color: #F8FAFC;
+}
+
+.retro-card-sm {
+  background-color: #131B2E;
+  border: 2px solid #334155;
+  box-shadow: 2px 2px 0px #020617;
+  color: #F8FAFC;
+}
+
+.retro-button {
+  border: 2px solid #020617;
+  box-shadow: 3px 3px 0px #020617;
+  transition: all 0.1s ease;
+}
+
+.retro-button:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px #020617;
+}
+
+.retro-button:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #020617;
+}
+
+/* Entry & Exit CSS animations for game phases and modals */
+@keyframes phaseFadeSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes phaseFadeSlideOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes modalBackdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalBackdropFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modalSlideUpIn {
+  0% {
+    opacity: 0;
+    transform: translateY(28px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modalSlideUpOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+}
+
+.animate-phase-in {
+  animation: phaseFadeSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-phase-out {
+  animation: phaseFadeSlideOut 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-modal-backdrop-in {
+  animation: modalBackdropFadeIn 0.22s ease-out forwards;
+}
+
+.animate-modal-content-in {
+  animation: modalSlideUpIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
