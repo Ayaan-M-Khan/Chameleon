@@ -476,26 +476,52 @@ export default function App() {
     setPlayers(updated);
     setClueInput('');
 
-    // In Pass & Play mode, advance to next player or check if all done
+    // In Room mode, sync submitted clue immediately so other peers see it live
+    if (gameMode === 'room' && roomId) {
+      socketClient.syncState(roomId, { players: updated });
+      broadcastState('clue_submission', updated);
+    }
+
+    // In Pass & Play mode: advance to next player or check if all done
     if (gameMode === 'pass_and_play') {
       const nextIdx = passAndPlayIndex + 1;
-      if (nextIdx < players.length) {
+      const humanPlayers = updated.filter((p) => p.isHuman);
+      if (nextIdx < humanPlayers.length) {
         setPassAndPlayIndex(nextIdx);
         setIsPassAndPlayModalOpen(true);
         return;
       }
     }
 
-    // In Solo mode, trigger AI bot clues with realistic sequential stagger
-    processBotClues(updated);
+    // Strict requirement: MUST wait for everyone to input their clue before starting voting section!
+    if (updated.every((p) => p.hasSubmittedClue)) {
+      transitionToVoting(updated);
+      return;
+    }
+
+    // If there are unsubmitted AI bots, trigger their clues
+    const hasUnsubmittedBots = updated.some((p) => !p.isHuman && !p.hasSubmittedClue);
+    if (hasUnsubmittedBots && (gameMode !== 'room' || isHost)) {
+      processBotClues(updated);
+    }
   };
 
   const autoSubmitCurrentClue = () => {
-    if (!activePlayer.hasSubmittedClue) {
-      const fallback = activePlayer.role === 'fox' ? 'Wild' : (secretCoordinate?.item || 'Play');
-      setClueInput(fallback);
-      handleSubmitClue();
-    }
+    // For anyone who hasn't submitted a clue yet, auto-assign
+    setPlayers((prev) => {
+      const updated = prev.map((p) => {
+        if (p.hasSubmittedClue) return p;
+        const fallback = p.role === 'fox' ? 'Wild' : (secretCoordinate?.item || 'Hint');
+        return { ...p, clue: fallback, hasSubmittedClue: true, isReady: true };
+      });
+      if (gameMode === 'room' && roomId) {
+        socketClient.syncState(roomId, { players: updated });
+        broadcastState('clue_submission', updated);
+      }
+      // Everyone has a clue now, transition to voting
+      transitionToVoting(updated);
+      return updated;
+    });
   };
 
   // Simulate AI bots submitting clues
@@ -504,55 +530,84 @@ export default function App() {
 
     if (unsubmittedBots.length === 0) {
       // Check if all players have submitted
-      const allDone = currentPlayers.every((p) => p.hasSubmittedClue);
-      if (allDone) {
+      if (currentPlayers.every((p) => p.hasSubmittedClue)) {
         transitionToVoting(currentPlayers);
       }
       return;
     }
 
     // Stagger bot clues realistically
-    let delay = 350;
-    let workingPlayers = [...currentPlayers];
+    let delay = 400;
 
     unsubmittedBots.forEach((bot, idx) => {
       setTimeout(() => {
-        const existingClues = workingPlayers
-          .filter((p) => p.hasSubmittedClue)
-          .map((p) => p.clue);
+        setPlayers((prev) => {
+          const existingClues = prev
+            .filter((p) => p.hasSubmittedClue)
+            .map((p) => p.clue);
 
-        const botClue = generateBotClue(
-          bot,
-          category,
-          secretCoordinate?.item || '',
-          existingClues,
-          settings.foxSeeOneClueEarly
-        );
+          const botClue = generateBotClue(
+            bot,
+            category,
+            secretCoordinate?.item || '',
+            existingClues,
+            settings.foxSeeOneClueEarly
+          );
 
-        workingPlayers = workingPlayers.map((p) =>
-          p.id === bot.id
-            ? { ...p, clue: botClue, hasSubmittedClue: true, isReady: true }
-            : p
-        );
+          const nextPlayers = prev.map((p) =>
+            p.id === bot.id
+              ? { ...p, clue: botClue, hasSubmittedClue: true, isReady: true }
+              : p
+          );
 
-        setPlayers([...workingPlayers]);
-        sound.click();
+          if (gameMode === 'room' && roomId) {
+            socketClient.syncState(roomId, { players: nextPlayers });
+            broadcastState('clue_submission', nextPlayers);
+          }
 
-        // If last bot finished, move to voting phase
-        if (idx === unsubmittedBots.length - 1) {
-          setTimeout(() => {
-            transitionToVoting(workingPlayers);
-          }, 600);
-        }
+          sound.click();
+
+          // If last bot finished, check if EVERY player has now submitted their clue
+          if (idx === unsubmittedBots.length - 1) {
+            setTimeout(() => {
+              setPlayers((latest) => {
+                // Strict requirement: MUST wait for everyone to input their clue before starting voting section!
+                if (latest.every((p) => p.hasSubmittedClue)) {
+                  transitionToVoting(latest);
+                }
+                return latest;
+              });
+            }, 600);
+          }
+
+          return nextPlayers;
+        });
       }, delay);
-      delay += 450;
+      delay += 550;
     });
   };
 
   // Transition from Clues to Voting Phase
   const transitionToVoting = (finalPlayers: Player[]) => {
+    // Strict requirement: MUST wait for everyone to input their clue before starting voting section!
+    if (!finalPlayers.every((p) => p.hasSubmittedClue)) {
+      return;
+    }
     sound.accuse();
     setGamePhase('voting');
+    setSelectedVoteTargetId(null);
+
+    if (gameMode === 'pass_and_play') {
+      setPassAndPlayIndex(0);
+      setIsPassAndPlayModalOpen(true);
+    }
+
+    if (gameMode === 'room' && roomId) {
+      socketClient.syncState(roomId, {
+        gamePhase: 'voting',
+        players: finalPlayers,
+      });
+    }
     broadcastState('voting', finalPlayers);
   };
 
@@ -567,52 +622,122 @@ export default function App() {
     );
     setPlayers(updated);
 
-    // If bots still need to vote, generate bot votes
-    processBotVotes(updated);
-  };
+    // In Room mode, sync vote immediately
+    if (gameMode === 'room' && roomId) {
+      socketClient.syncState(roomId, { players: updated });
+      broadcastState('voting', updated);
+    }
 
-  const autoSubmitCurrentVote = () => {
-    if (!selectedVoteTargetId) {
-      const candidates = players.filter((p) => p.id !== activePlayer.id);
-      const randomTarget = candidates[Math.floor(Math.random() * candidates.length)].id;
-      setSelectedVoteTargetId(randomTarget);
+    // In Pass & Play mode: advance to next player or check if all done
+    if (gameMode === 'pass_and_play') {
+      const nextIdx = passAndPlayIndex + 1;
+      const humanPlayers = updated.filter((p) => p.isHuman);
+      if (nextIdx < humanPlayers.length) {
+        setPassAndPlayIndex(nextIdx);
+        setSelectedVoteTargetId(null);
+        setIsPassAndPlayModalOpen(true);
+        return;
+      }
+    }
+
+    // Check if there are unsubmitted AI bots that need to vote
+    const hasUnsubmittedBots = updated.some((p) => !p.isHuman && !p.votedForId);
+    if (hasUnsubmittedBots && (gameMode !== 'room' || isHost)) {
+      processBotVotes(updated);
+      return;
+    }
+
+    // Strict requirement: MUST wait for everyone to put in their vote before showing results!
+    if (updated.every((p) => Boolean(p.votedForId))) {
       setTimeout(() => {
-        handleSubmitVote();
-      }, 50);
-    } else {
-      handleSubmitVote();
+        evaluateVotingTally(updated);
+      }, 800);
     }
   };
 
-  // Process AI Bot Votes
-  const processBotVotes = (currentPlayers: Player[]) => {
-    let working = [...currentPlayers];
-
-    // Each bot that hasn't voted yet makes a decision
-    working.forEach((bot) => {
-      if (!bot.isHuman && !bot.votedForId) {
-        const voteId = decideBotVote(
-          bot,
-          working,
-          category,
-          secretCoordinate?.item || ''
-        );
-        working = working.map((p) =>
-          p.id === bot.id ? { ...p, votedForId: voteId } : p
-        );
+  const autoSubmitCurrentVote = () => {
+    // For anyone who hasn't voted yet, assign a vote to another random player
+    setPlayers((prev) => {
+      const updated = prev.map((p) => {
+        if (p.votedForId) return p;
+        const candidates = prev.filter((cand) => cand.id !== p.id);
+        const randomTarget = candidates[Math.floor(Math.random() * candidates.length)]?.id || prev[0].id;
+        return { ...p, votedForId: randomTarget };
+      });
+      if (gameMode === 'room' && roomId) {
+        socketClient.syncState(roomId, { players: updated });
+        broadcastState('voting', updated);
       }
+      // Everyone has voted now, evaluate tally
+      setTimeout(() => {
+        evaluateVotingTally(updated);
+      }, 700);
+      return updated;
     });
+  };
 
-    setPlayers(working);
+  // Process AI Bot Votes with realistic deliberation stagger
+  const processBotVotes = (currentPlayers: Player[]) => {
+    const unvotedBots = currentPlayers.filter((p) => !p.isHuman && !p.votedForId);
 
-    // When all votes are locked in, evaluate tally!
-    setTimeout(() => {
-      evaluateVotingTally(working);
-    }, 700);
+    if (unvotedBots.length === 0) {
+      // Check if everyone has voted
+      if (currentPlayers.every((p) => Boolean(p.votedForId))) {
+        setTimeout(() => {
+          evaluateVotingTally(currentPlayers);
+        }, 800);
+      }
+      return;
+    }
+
+    let delay = 450;
+    unvotedBots.forEach((bot, idx) => {
+      setTimeout(() => {
+        setPlayers((prev) => {
+          const voteId = decideBotVote(
+            bot,
+            prev,
+            category,
+            secretCoordinate?.item || ''
+          );
+
+          const nextPlayers = prev.map((p) =>
+            p.id === bot.id ? { ...p, votedForId: voteId } : p
+          );
+
+          if (gameMode === 'room' && roomId) {
+            socketClient.syncState(roomId, { players: nextPlayers });
+            broadcastState('voting', nextPlayers);
+          }
+
+          sound.click();
+
+          // Check if this was the last bot AND if everyone has voted
+          if (idx === unvotedBots.length - 1) {
+            setTimeout(() => {
+              setPlayers((latest) => {
+                // Strict requirement: MUST wait for everyone to put in their vote before showing results!
+                if (latest.every((p) => Boolean(p.votedForId))) {
+                  evaluateVotingTally(latest);
+                }
+                return latest;
+              });
+            }, 800);
+          }
+
+          return nextPlayers;
+        });
+      }, delay);
+      delay += 500;
+    });
   };
 
   // Evaluate votes and determine if Fox was caught
   const evaluateVotingTally = (votedPlayers: Player[]) => {
+    // Strict requirement: MUST wait for everyone to put in their vote before showing results!
+    if (!votedPlayers.every((p) => Boolean(p.votedForId))) {
+      return;
+    }
     const tally: Record<string, number> = {};
     votedPlayers.forEach((p) => {
       if (p.votedForId) {
@@ -1103,6 +1228,7 @@ export default function App() {
         isOpen={isPassAndPlayModalOpen && gameMode === 'pass_and_play'}
         player={players[passAndPlayIndex] || null}
         onConfirmReady={() => setIsPassAndPlayModalOpen(false)}
+        gamePhase={gamePhase}
       />
     </div>
   );

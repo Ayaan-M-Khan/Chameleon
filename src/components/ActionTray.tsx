@@ -98,134 +98,236 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
         >
           {/* PHASE 1: CLUE ENTRY */}
-          {gamePhase === 'clue_submission' && (
-        <div>
-          {!activePlayer.hasSubmittedClue ? (
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="text-sm font-display font-extrabold uppercase text-white">
-                    Your Turn: Enter Your Clue
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    (Up to 80 chars — give a subtle hint without giving away the secret to the Chameleon)
-                  </span>
-                </div>
+          {gamePhase === 'clue_submission' && (() => {
+            const cluesSubmittedCount = players.filter((p) => p.hasSubmittedClue).length;
+            const totalPlayers = players.length;
+            const waitingCluePlayers = players.filter((p) => !p.hasSubmittedClue);
+            const allCluesSubmitted = cluesSubmittedCount === totalPlayers;
 
-                <div className="relative flex items-center">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={clueInput}
-                    onChange={(e) => onChangeClueInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="e.g. Cleats, John Lennon, Serengeti National Park, Bohemian Rhapsody..."
-                    maxLength={80}
-                    className="w-full px-3.5 py-2.5 bg-slate-900 border-2 border-slate-700 rounded-lg text-sm sm:text-base font-medium text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-amber-400 shadow-xs pr-16"
-                  />
-                  <span className="absolute right-3 text-[11px] font-mono font-bold text-slate-400">
-                    {clueInput.length}/80
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 self-end md:self-auto">
-                <button
-                  onClick={onSubmitClue}
-                  disabled={!clueInput.trim()}
-                  className="retro-button px-5 py-2.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 disabled:pointer-events-none rounded-lg font-display font-black text-slate-950 uppercase tracking-wider text-xs sm:text-sm flex items-center gap-2 shadow-md cursor-pointer"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>Submit Clue</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between p-3 bg-emerald-950/60 border-2 border-emerald-500/70 rounded-lg text-emerald-200">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                <div>
-                  <span className="font-bold text-sm">Clue locked in: </span>
-                  <span className="font-mono font-black text-sm sm:text-base bg-emerald-900/80 px-2 py-0.5 rounded border border-emerald-500 text-yellow-300">
-                    "{activePlayer.clue}"
-                  </span>
-                </div>
-              </div>
-              <span className="text-xs font-semibold text-emerald-400 animate-pulse">
-                Waiting for remaining players...
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* PHASE 2: VOTING PHASE */}
-      {gamePhase === 'voting' && (
-        <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <div>
-              <h3 className="font-display font-black text-base sm:text-lg uppercase tracking-tight text-white flex items-center gap-2">
-                <AlertOctagon className="w-5 h-5 text-rose-400" />
-                Who's the Chameleon? Vote.
-              </h3>
-              <p className="text-xs text-slate-400">
-                Review everyone's clue in the left table. Cast your vote for the player you suspect is blending in!
-              </p>
-            </div>
-
-            {hasCurrentPlayerVoted && (
-              <span className="text-xs font-bold text-emerald-300 bg-emerald-950 border border-emerald-600 px-2.5 py-1 rounded-md self-start sm:self-auto flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Your vote is cast
-              </span>
-            )}
-          </div>
-
-          {/* Clickable Player Badges */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 mb-3">
-            {players
-              .filter((p) => p.id !== activePlayer.id)
-              .map((p) => {
-                const isSelected = selectedVoteTargetId === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    disabled={hasCurrentPlayerVoted}
-                    onClick={() => onSelectVoteTarget(p.id)}
-                    className={`p-2.5 rounded-lg border-2 text-left transition-all flex items-center gap-2 ${
-                      isSelected
-                        ? 'bg-rose-600 border-rose-400 text-white shadow-md scale-[1.02]'
-                        : 'bg-slate-800 hover:bg-slate-700/80 border-slate-700 text-white shadow-xs'
-                    } ${hasCurrentPlayerVoted ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-                  >
-                    <span className="text-xl shrink-0">{p.avatar}</span>
-                    <div className="min-w-0">
-                      <div className="font-bold text-xs truncate leading-tight">
-                        {p.name}
+            return (
+              <div>
+                {!activePlayer.hasSubmittedClue ? (
+                  <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-display font-extrabold uppercase text-white">
+                            Your Turn: Enter Your Clue
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            (Give a subtle hint without revealing secret to Chameleon)
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono font-bold bg-slate-800 text-amber-300 border border-slate-700 px-2 py-0.5 rounded">
+                          Clues: {cluesSubmittedCount} / {totalPlayers} In
+                        </span>
                       </div>
-                      <div className={`text-[10px] font-mono truncate ${isSelected ? 'text-rose-100' : 'text-slate-400'}`}>
-                        "{p.clue || '...'}"
+
+                      <div className="relative flex items-center">
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          value={clueInput}
+                          onChange={(e) => onChangeClueInput(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder="e.g. Cleats, John Lennon, Serengeti National Park, Bohemian Rhapsody..."
+                          maxLength={80}
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border-2 border-slate-700 rounded-lg text-sm sm:text-base font-medium text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-amber-400 shadow-xs pr-16"
+                        />
+                        <span className="absolute right-3 text-[11px] font-mono font-bold text-slate-400">
+                          {clueInput.length}/80
+                        </span>
                       </div>
                     </div>
-                  </button>
-                );
-              })}
-          </div>
 
-          {/* Confirm Vote Button */}
-          {!hasCurrentPlayerVoted && (
-            <div className="flex justify-end">
-              <button
-                onClick={onSubmitVote}
-                disabled={!selectedVoteTargetId}
-                className="retro-button px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50 disabled:pointer-events-none rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 shadow-md cursor-pointer"
-              >
-                <AlertOctagon className="w-4 h-4" />
-                <span>Cast Vote Accusation</span>
-              </button>
+                    <div className="flex items-center gap-2 self-end md:self-auto">
+                      <button
+                        onClick={onSubmitClue}
+                        disabled={!clueInput.trim()}
+                        className="retro-button px-5 py-2.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 disabled:pointer-events-none rounded-lg font-display font-black text-slate-950 uppercase tracking-wider text-xs sm:text-sm flex items-center gap-2 shadow-md cursor-pointer"
+                      >
+                        <Send className="w-4 h-4" />
+                        <span>Submit Clue</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-emerald-950/70 border-2 border-emerald-500/80 rounded-xl text-emerald-100 shadow-md">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                        <div>
+                          <span className="font-bold text-sm text-emerald-300">Your clue is locked in: </span>
+                          <span className="font-mono font-black text-sm sm:text-base bg-emerald-900/90 px-2.5 py-0.5 rounded border border-emerald-500 text-yellow-300">
+                            "{activePlayer.clue}"
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <span className="text-xs font-mono font-bold bg-slate-900/90 text-amber-300 border border-emerald-500/50 px-2.5 py-1 rounded-md">
+                          Clues: {cluesSubmittedCount} / {totalPlayers} In
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-900/80 h-2 rounded-full overflow-hidden my-2 border border-emerald-500/30">
+                      <div
+                        className="h-full bg-emerald-400 transition-all duration-500"
+                        style={{ width: `${Math.round((cluesSubmittedCount / totalPlayers) * 100)}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-emerald-300/90 flex-wrap gap-1">
+                      {allCluesSubmitted ? (
+                        <span className="font-bold text-emerald-200 animate-pulse flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4 text-yellow-300" />
+                          Everyone has input their clue! Starting the voting section…
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 flex-wrap">
+                          <Clock className="w-3.5 h-3.5 text-amber-400 animate-spin shrink-0" />
+                          <span>Waiting for everyone to input their clue before starting the voting section...</span>
+                          <span className="text-slate-300 font-medium">
+                            (Waiting on: {waitingCluePlayers.map((p) => p.name).join(', ')})
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+      {/* PHASE 2: VOTING PHASE */}
+      {gamePhase === 'voting' && (() => {
+        const votesCastCount = players.filter((p) => Boolean(p.votedForId)).length;
+        const totalPlayers = players.length;
+        const waitingVotePlayers = players.filter((p) => !p.votedForId);
+        const allVotesSubmitted = votesCastCount === totalPlayers;
+        const votedTarget = players.find((p) => p.id === activePlayer.votedForId);
+
+        return (
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div>
+                <h3 className="font-display font-black text-base sm:text-lg uppercase tracking-tight text-white flex items-center gap-2">
+                  <AlertOctagon className="w-5 h-5 text-rose-400" />
+                  Who's the Chameleon? Vote.
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Review everyone's clue in the left table. Cast your vote for the player you suspect is blending in!
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <span className="text-xs font-mono font-bold bg-slate-900/90 text-rose-300 border border-rose-500/50 px-2.5 py-1 rounded-md">
+                  Votes: {votesCastCount} / {totalPlayers} In
+                </span>
+                {hasCurrentPlayerVoted && (
+                  <span className="text-xs font-bold text-emerald-300 bg-emerald-950 border border-emerald-600 px-2.5 py-1 rounded-md flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Your vote is cast
+                  </span>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      )}
+
+            {/* Waiting for everyone banner if current player voted */}
+            {hasCurrentPlayerVoted && (
+              <div className="p-3.5 bg-purple-950/70 border-2 border-purple-500/80 rounded-xl text-purple-100 shadow-md mb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-purple-300 shrink-0" />
+                    <div>
+                      <span className="font-bold text-xs sm:text-sm text-purple-200">Your accusation vote is locked: </span>
+                      <span className="font-mono font-black text-xs sm:text-sm bg-purple-900/90 px-2 py-0.5 rounded border border-purple-400 text-yellow-300">
+                        👉 {votedTarget?.name || 'Selected'}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-mono text-purple-300 font-semibold">
+                    {votesCastCount} of {totalPlayers} votes recorded
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full bg-slate-900/80 h-2 rounded-full overflow-hidden my-2 border border-purple-500/30">
+                  <div
+                    className="h-full bg-purple-400 transition-all duration-500"
+                    style={{ width: `${Math.round((votesCastCount / totalPlayers) * 100)}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-purple-200/90 flex-wrap gap-1">
+                  {allVotesSubmitted ? (
+                    <span className="font-bold text-yellow-300 animate-pulse flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-yellow-300" />
+                      All {totalPlayers} votes are in! Tallying accusations and revealing results…
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 flex-wrap">
+                      <Clock className="w-3.5 h-3.5 text-amber-400 animate-spin shrink-0" />
+                      <span>Waiting for everyone to put in their vote before showing the results...</span>
+                      <span className="text-slate-300 font-medium">
+                        (Waiting on: {waitingVotePlayers.map((p) => p.name).join(', ')})
+                      </span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Clickable Player Badges */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 mb-3">
+              {players
+                .filter((p) => p.id !== activePlayer.id)
+                .map((p) => {
+                  const isSelected = selectedVoteTargetId === p.id;
+                  const isMyVotedTarget = activePlayer.votedForId === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      disabled={hasCurrentPlayerVoted}
+                      onClick={() => onSelectVoteTarget(p.id)}
+                      className={`p-2.5 rounded-lg border-2 text-left transition-all flex items-center gap-2 ${
+                        isMyVotedTarget
+                          ? 'bg-purple-900 border-purple-400 text-white shadow-md scale-[1.02] ring-2 ring-purple-300'
+                          : isSelected
+                          ? 'bg-rose-600 border-rose-400 text-white shadow-md scale-[1.02]'
+                          : 'bg-slate-800 hover:bg-slate-700/80 border-slate-700 text-white shadow-xs'
+                      } ${hasCurrentPlayerVoted ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      <span className="text-xl shrink-0">{p.avatar}</span>
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs truncate leading-tight">
+                          {p.name}
+                        </div>
+                        <div className={`text-[10px] font-mono truncate ${isSelected || isMyVotedTarget ? 'text-rose-100' : 'text-slate-400'}`}>
+                          "{p.clue || '...'}"
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+
+            {/* Confirm Vote Button */}
+            {!hasCurrentPlayerVoted && (
+              <div className="flex justify-end">
+                <button
+                  onClick={onSubmitVote}
+                  disabled={!selectedVoteTargetId}
+                  className="retro-button px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50 disabled:pointer-events-none rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 shadow-md cursor-pointer"
+                >
+                  <AlertOctagon className="w-4 h-4" />
+                  <span>Cast Vote Accusation</span>
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* PHASE 3: CHAMELEON ESCAPE GUESS */}
       {gamePhase === 'fox_guess' && (

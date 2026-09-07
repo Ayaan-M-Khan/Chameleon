@@ -1,19 +1,23 @@
 import React from 'react';
-import { Eye, ShieldAlert, UserCheck } from 'lucide-react';
-import { Player } from '../types';
+import { ShieldAlert, UserCheck, CheckCircle2 } from 'lucide-react';
+import { Player, GamePhase } from '../types';
 
 interface PassAndPlayModalProps {
   isOpen: boolean;
   player: Player | null;
   onConfirmReady: () => void;
+  gamePhase?: GamePhase;
 }
 
 export const PassAndPlayModal: React.FC<PassAndPlayModalProps> = ({
   isOpen,
   player,
   onConfirmReady,
+  gamePhase = 'clue_submission',
 }) => {
   if (!isOpen || !player) return null;
+
+  const isVoting = gamePhase === 'voting';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
@@ -32,7 +36,9 @@ export const PassAndPlayModal: React.FC<PassAndPlayModalProps> = ({
             Hand over to {player.name}
           </h3>
           <p className="text-xs text-slate-300 mt-1 max-w-xs mx-auto">
-            Ensure no other players can see your screen before pressing the button below to view your secret role & coordinate!
+            {isVoting
+              ? 'Ensure no other players can see your screen before pressing the button below to secretly cast your accusation vote!'
+              : 'Ensure no other players can see your screen before pressing the button below to view your secret role & enter your clue!'}
           </p>
         </div>
 
@@ -41,8 +47,17 @@ export const PassAndPlayModal: React.FC<PassAndPlayModalProps> = ({
             onClick={onConfirmReady}
             className="w-full retro-button py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-black text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer"
           >
-            <UserCheck className="w-4 h-4" />
-            <span>I am {player.name} — Reveal My Turn</span>
+            {isVoting ? (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                <span>I am {player.name} — Cast My Secret Vote</span>
+              </>
+            ) : (
+              <>
+                <UserCheck className="w-4 h-4" />
+                <span>I am {player.name} — Reveal My Turn</span>
+              </>
+            )}
           </button>
         </div>
       </div>

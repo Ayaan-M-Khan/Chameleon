@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Check, Clock, Bot, User, HelpCircle, Eye, EyeOff } from 'lucide-react';
 import { Player, GamePhase } from '../types';
 
@@ -27,6 +28,10 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
   // When voting or resolution, clues are fully public!
   const isVotingOrResolution = gamePhase === 'voting' || gamePhase === 'fox_guess' || gamePhase === 'round_resolution';
 
+  // Clues submitted & votes cast counts
+  const cluesSubmittedCount = players.filter((p) => p.hasSubmittedClue).length;
+  const votesCastCount = players.filter((p) => Boolean(p.votedForId)).length;
+
   return (
     <div className="retro-card rounded-xl p-4 sm:p-5 flex flex-col h-full bg-[#131B2E] border-2 border-slate-700 text-slate-100 shadow-xl overflow-hidden">
       {/* Table Header & Title */}
@@ -49,9 +54,20 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
               <span className="hidden sm:inline">{showAllCluesLocally ? 'Mask Early Clues' : 'Peek Clues'}</span>
             </button>
           )}
-          <span className="text-xs font-mono font-bold bg-slate-800 text-amber-300 border border-slate-700 px-2.5 py-0.5 rounded-md">
-            {players.length} Players
-          </span>
+
+          {gamePhase === 'clue_submission' ? (
+            <span className="text-xs font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-600 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+              Clues: {cluesSubmittedCount}/{players.length}
+            </span>
+          ) : gamePhase === 'voting' ? (
+            <span className="text-xs font-mono font-bold bg-rose-950 text-rose-300 border border-rose-600 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+              Votes: {votesCastCount}/{players.length}
+            </span>
+          ) : (
+            <span className="text-xs font-mono font-bold bg-slate-800 text-amber-300 border border-slate-700 px-2.5 py-0.5 rounded-md">
+              {players.length} Players
+            </span>
+          )}
         </div>
       </div>
 
@@ -186,7 +202,9 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                           </span>
                         )
                       ) : (
-                        <span className="text-[11px] text-slate-500 italic">Voting…</span>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-400/90 font-medium italic">
+                          <Clock className="w-3 h-3 animate-spin text-amber-400" /> Deciding…
+                        </span>
                       )
                     ) : isVotingOrResolution ? (
                       p.votedForId ? (
