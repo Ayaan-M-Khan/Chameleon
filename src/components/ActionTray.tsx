@@ -352,8 +352,17 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                             </span>
                           )}
                         </div>
-                        <div className={`text-[10px] font-mono truncate ${isSelected || isMyVotedTarget ? 'text-rose-100' : 'text-slate-400'}`}>
-                          "{p.clue || '...'}"
+                        <div
+                          className={`text-[11px] font-mono font-bold truncate mt-0.5 ${
+                            isMyVotedTarget
+                              ? 'text-yellow-200'
+                              : isSelected
+                              ? 'text-rose-100'
+                              : 'text-amber-300'
+                          }`}
+                          title={p.clue ? `Clue: "${p.clue}"` : undefined}
+                        >
+                          {p.clue ? `"${p.clue}"` : <span className="text-slate-500 italic font-sans font-normal text-[10px]">No clue</span>}
                         </div>
                       </div>
                     </button>

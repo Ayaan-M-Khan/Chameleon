@@ -10,22 +10,32 @@ export function generateBotClue(
   existingClues: string[],
   foxCanSeeOneClueEarly: boolean
 ): string {
+  const safeTarget = targetWord && targetWord.trim() !== '' ? targetWord.trim() : (category.items[0] || 'Target');
+
   if (bot.role === 'innocent') {
-    // Pick from the target word's clue bank
-    const bank = category.clueBank[targetWord] || [targetWord.slice(0, 3)];
+    // Pick from the target word's clue bank (case-insensitive lookup)
+    const clueKeys = Object.keys(category.clueBank || {});
+    const matchingKey = clueKeys.find(k => k.toLowerCase() === safeTarget.toLowerCase()) || safeTarget;
+    const bank = category.clueBank[matchingKey] || [safeTarget.slice(0, Math.min(4, safeTarget.length))];
+
     // Filter out already submitted clues if possible
-    const available = bank.filter(c => !existingClues.map(e => e.toLowerCase()).includes(c.toLowerCase()));
+    const available = bank.filter(c => c && !existingClues.map(e => e.toLowerCase()).includes(c.toLowerCase()));
     const pool = available.length > 0 ? available : bank;
-    return pool[Math.floor(Math.random() * pool.length)];
+    const validPool = pool.filter(c => c && c.trim() !== '');
+
+    if (validPool.length > 0) {
+      return validPool[Math.floor(Math.random() * validPool.length)].trim();
+    }
+    return safeTarget;
   }
 
-  // The bot is the FOX!
+  // The bot is the FOX / Chameleon!
   // Fox does not know the secret word.
   // If fox sees an early clue or other clues exist:
   if ((foxCanSeeOneClueEarly || existingClues.length > 0) && existingClues.length > 0) {
     // Pick a random innocent clue already submitted
     const sampleClue = existingClues[Math.floor(Math.random() * existingClues.length)].toLowerCase();
-    
+
     // Check if any board word's bank matches this clue
     const potentialWords = category.items.filter(item => {
       const bank = category.clueBank[item] || [];
@@ -34,18 +44,27 @@ export function generateBotClue(
 
     if (potentialWords.length > 0) {
       const guessedItem = potentialWords[Math.floor(Math.random() * potentialWords.length)];
-      const candidateBank = (category.clueBank[guessedItem] || []).filter(c => c.toLowerCase() !== sampleClue);
+      const candidateBank = (category.clueBank[guessedItem] || []).filter(
+        c => c && c.toLowerCase() !== sampleClue && !existingClues.map(e => e.toLowerCase()).includes(c.toLowerCase())
+      );
       if (candidateBank.length > 0) {
-        return candidateBank[Math.floor(Math.random() * candidateBank.length)];
+        return candidateBank[Math.floor(Math.random() * candidateBank.length)].trim();
       }
     }
   }
 
   // Fallback to category fox clue bank
-  const foxBank = category.foxClueBank;
-  const filtered = foxBank.filter(c => !existingClues.map(e => e.toLowerCase()).includes(c.toLowerCase()));
+  const foxBank = (category.foxClueBank && category.foxClueBank.length > 0)
+    ? category.foxClueBank
+    : ['Sweat', 'Athlete', 'Speed', 'Victory', 'Coach'];
+  const filtered = foxBank.filter(c => c && !existingClues.map(e => e.toLowerCase()).includes(c.toLowerCase()));
   const pool = filtered.length > 0 ? filtered : foxBank;
-  return pool[Math.floor(Math.random() * pool.length)];
+  const validPool = pool.filter(c => c && c.trim() !== '');
+  if (validPool.length > 0) {
+    return validPool[Math.floor(Math.random() * validPool.length)].trim();
+  }
+
+  return 'Wild';
 }
 
 /**

@@ -178,6 +178,28 @@ export default function App() {
     botTimeoutsRef.current = [];
   }, []);
 
+  // Refs for tracking active round state across async timers and socket closures
+  const categoryRef = useRef<Category>(category);
+  const secretCoordinateRef = useRef<Coordinate | null>(secretCoordinate);
+  const roomIdRef = useRef<string>(roomId);
+  const gamePhaseRef = useRef<GamePhase>(gamePhase);
+
+  useEffect(() => {
+    roomIdRef.current = roomId;
+  }, [roomId]);
+
+  useEffect(() => {
+    gamePhaseRef.current = gamePhase;
+  }, [gamePhase]);
+
+  useEffect(() => {
+    categoryRef.current = category;
+  }, [category]);
+
+  useEffect(() => {
+    secretCoordinateRef.current = secretCoordinate;
+  }, [secretCoordinate]);
+
   // Turn timer
   const [timeLeft, setTimeLeft] = useState(60);
 
@@ -217,7 +239,7 @@ export default function App() {
       if (roomId) {
         window.location.hash = roomId;
       } else if (window.location.hash) {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        window.history.replaceState(null, '', window.location.pathname);
       }
     }
   }, [roomId]);
@@ -246,12 +268,33 @@ export default function App() {
   // Setup Realtime WebSocket and BroadcastChannel Sync
   useEffect(() => {
     const unsubscribe = socketClient.subscribe((event) => {
+      // If user is at home or not in a room, completely ignore room events
+      if (gamePhaseRef.current === 'home' || !roomIdRef.current) {
+        return;
+      }
+
       if (event.type === 'ROOM_STATE_SYNC' && event.room) {
+        if (event.room.id !== roomIdRef.current) return;
+        // Verify this player hasn't left or been removed from the room
+        const amInRoom = event.room.players?.some((p) => p.id === myPlayerId);
+        if (!amInRoom) {
+          return;
+        }
+
         if (event.room.players) setPlayers(event.room.players);
         if (event.room.settings) setSettings((prev) => ({ ...prev, ...event.room.settings }));
-        if (event.room.gamePhase) setGamePhase(event.room.gamePhase);
-        if (event.room.category) setCategory(event.room.category);
-        if (event.room.secretCoordinate !== undefined) setSecretCoordinate(event.room.secretCoordinate);
+        if (event.room.gamePhase) {
+          setGamePhase(event.room.gamePhase);
+          gamePhaseRef.current = event.room.gamePhase;
+        }
+        if (event.room.category) {
+          setCategory(event.room.category);
+          categoryRef.current = event.room.category;
+        }
+        if (event.room.secretCoordinate !== undefined) {
+          setSecretCoordinate(event.room.secretCoordinate);
+          secretCoordinateRef.current = event.room.secretCoordinate;
+        }
         if (event.room.foxPlayerId !== undefined) setFoxPlayerId(event.room.foxPlayerId);
         if (event.room.roundResolution !== undefined) {
           setRoundResolution(event.room.roundResolution);
@@ -259,8 +302,12 @@ export default function App() {
         }
         if (event.room.roundNumber !== undefined) setRoundNumber(event.room.roundNumber);
       } else if (event.type === 'ROOM_SETTINGS_UPDATED' && event.settings) {
+        if (event.room && event.room.id !== roomIdRef.current) return;
         setSettings((prev) => ({ ...prev, ...event.settings }));
       } else if ((event.type === 'PLAYER_JOINED' || event.type === 'PLAYER_LEFT') && event.room) {
+        if (event.room.id !== roomIdRef.current) return;
+        const amInRoom = event.room.players?.some((p) => p.id === myPlayerId);
+        if (!amInRoom) return;
         if (event.room.players) setPlayers(event.room.players);
       } else if (event.type === 'PLAYER_KICKED') {
         if (event.kickedPlayerId === myPlayerId) {
@@ -268,7 +315,7 @@ export default function App() {
           handleLeaveRoom();
           return;
         }
-        if (event.room?.players) {
+        if (event.room && event.room.id === roomIdRef.current && event.room.players) {
           setPlayers(event.room.players);
         }
       }
@@ -281,7 +328,7 @@ export default function App() {
 
   // Setup BroadcastChannel for Room Multiplayer fallback
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') return;
+    if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined' || !roomId) return;
 
     const channel = new BroadcastChannel(`fox_game_room_${roomId}`);
     broadcastChannelRef.current = channel;
@@ -299,10 +346,17 @@ export default function App() {
       } else if (data.type === 'PONG') {
         setPeerCount((prev) => prev + 1);
       } else if (data.type === 'STATE_SYNC' && gameMode === 'room') {
+        if (gamePhaseRef.current === 'home' || !roomIdRef.current) return;
         if (data.phase) setGamePhase(data.phase);
         if (data.players) setPlayers(data.players);
-        if (data.category) setCategory(data.category);
-        if (data.secretCoordinate) setSecretCoordinate(data.secretCoordinate);
+        if (data.category) {
+          setCategory(data.category);
+          categoryRef.current = data.category;
+        }
+        if (data.secretCoordinate) {
+          setSecretCoordinate(data.secretCoordinate);
+          secretCoordinateRef.current = data.secretCoordinate;
+        }
         if (data.foxPlayerId) setFoxPlayerId(data.foxPlayerId);
         if (data.roundResolution) {
           setRoundResolution(data.roundResolution);
@@ -379,6 +433,7 @@ export default function App() {
       chosenCat = CATEGORIES.find((c) => c.id === selectedCategoryId) || CATEGORIES[0];
     }
     setCategory(chosenCat);
+    categoryRef.current = chosenCat;
 
     // 2. Pick Random Coordinate: col (A-D) & row (1-4)
     const cols: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D'];
@@ -398,6 +453,7 @@ export default function App() {
       item,
     };
     setSecretCoordinate(coord);
+    secretCoordinateRef.current = coord;
 
     // 3. Secretly assign FOX / Chameleon based on settings.chameleonCount
     const count = Math.min(settings.chameleonCount || 1, Math.max(1, Math.floor(players.length / 2)));
@@ -436,6 +492,7 @@ export default function App() {
     }
 
     setGamePhase('clue_submission');
+    gamePhaseRef.current = 'clue_submission';
 
     if (gameMode === 'room' && roomId) {
       socketClient.syncState(roomId, {
@@ -454,7 +511,7 @@ export default function App() {
     if (gameMode !== 'pass_and_play') {
       const hasBots = updatedPlayers.some((p) => !p.isHuman);
       if (hasBots && (gameMode !== 'room' || isHost)) {
-        processBotClues(updatedPlayers, 3500);
+        processBotClues(updatedPlayers, 3500, coord, chosenCat);
       }
     }
   }, [selectedCategoryId, players, gameMode, settings.chameleonCount, settings.categoryDeckMode, settings.categoryPool, roomId, broadcastState, isHost]);
@@ -624,11 +681,18 @@ export default function App() {
   const autoSubmitCurrentClue = () => {
     setIsEditingClue(false);
     clearBotTimeouts();
-    // For anyone who hasn't submitted a clue yet, auto-assign
+    const activeCoord = secretCoordinateRef.current || secretCoordinate;
+    const activeCat = categoryRef.current || category;
+    const secretWord = activeCoord?.item || activeCat?.items[0] || '';
+
+    // For anyone who hasn't submitted a clue yet, auto-assign valid clues
     setPlayers((prev) => {
+      const existingClues = prev.filter((p) => p.hasSubmittedClue && p.clue && p.clue.trim()).map((p) => p.clue);
       const updated = prev.map((p) => {
-        if (p.hasSubmittedClue) return p;
-        const fallback = p.role === 'fox' ? 'Wild' : (secretCoordinate?.item || 'Hint');
+        if (p.hasSubmittedClue && p.clue && p.clue.trim()) return p;
+        const fallback = p.isHuman
+          ? (p.role === 'fox' ? 'Wild' : (secretWord || 'Hint'))
+          : generateBotClue(p, activeCat, secretWord, existingClues, settings.foxSeeOneClueEarly);
         return { ...p, clue: fallback, hasSubmittedClue: true, isReady: true };
       });
       if (gameMode === 'room' && roomId) {
@@ -642,7 +706,12 @@ export default function App() {
   };
 
   // Simulate AI bots submitting clues
-  const processBotClues = (currentPlayers: Player[], baseDelay = 1200) => {
+  const processBotClues = (
+    currentPlayers: Player[],
+    baseDelay = 1200,
+    overrideCoord?: Coordinate | null,
+    overrideCat?: Category
+  ) => {
     clearBotTimeouts();
     const unsubmittedBots = currentPlayers.filter((p) => !p.isHuman && !p.hasSubmittedClue);
 
@@ -654,6 +723,10 @@ export default function App() {
       return;
     }
 
+    const currentCoord = overrideCoord || secretCoordinateRef.current || secretCoordinate;
+    const currentCat = overrideCat || categoryRef.current || category;
+    const secretWord = currentCoord?.item || currentCat?.items[0] || '';
+
     // Stagger bot clues realistically
     unsubmittedBots.forEach((bot, idx) => {
       const delay = baseDelay + idx * 3000 + Math.floor(Math.random() * 800);
@@ -664,13 +737,17 @@ export default function App() {
           if (!currentBot || currentBot.hasSubmittedClue) return prev;
 
           const existingClues = prev
-            .filter((p) => p.hasSubmittedClue)
+            .filter((p) => p.hasSubmittedClue && p.clue && p.clue.trim())
             .map((p) => p.clue);
+
+          const activeCoord = overrideCoord || secretCoordinateRef.current || secretCoordinate;
+          const activeCat = overrideCat || categoryRef.current || category;
+          const targetItem = activeCoord?.item || activeCat?.items[0] || secretWord;
 
           const botClue = generateBotClue(
             currentBot,
-            category,
-            secretCoordinate?.item || '',
+            activeCat,
+            targetItem,
             existingClues,
             settings.foxSeeOneClueEarly
           );
@@ -712,14 +789,34 @@ export default function App() {
 
   // Transition from Clues to Voting Phase
   const transitionToVoting = (finalPlayers: Player[]) => {
-    // Strict requirement: MUST wait for everyone to input their clue before starting voting section!
-    if (!finalPlayers.every((p) => p.hasSubmittedClue)) {
-      return;
-    }
     clearBotTimeouts();
     setIsEditingClue(false);
     sound.accuse();
+
+    const activeCoord = secretCoordinateRef.current || secretCoordinate;
+    const activeCat = categoryRef.current || category;
+    const secretWord = activeCoord?.item || activeCat?.items[0] || '';
+
+    // GUARANTEE: Every player (especially AI bots) has a non-empty submitted clue!
+    const verifiedPlayers = finalPlayers.map((p) => {
+      if (p.clue && p.clue.trim() !== '') {
+        return { ...p, hasSubmittedClue: true, isReady: true };
+      }
+      const existingClues = finalPlayers.filter((pl) => pl.clue && pl.clue.trim()).map((pl) => pl.clue);
+      const generated = p.isHuman
+        ? (p.role === 'fox' ? 'Wild' : (secretWord || 'Hint'))
+        : generateBotClue(p, activeCat, secretWord, existingClues, settings.foxSeeOneClueEarly);
+      return {
+        ...p,
+        clue: generated || (p.role === 'fox' ? 'Wild' : 'Clue'),
+        hasSubmittedClue: true,
+        isReady: true,
+      };
+    });
+
+    setPlayers(verifiedPlayers);
     setGamePhase('voting');
+    gamePhaseRef.current = 'voting';
     setSelectedVoteTargetId(null);
 
     if (gameMode === 'pass_and_play') {
@@ -730,10 +827,10 @@ export default function App() {
     if (gameMode === 'room' && roomId) {
       socketClient.syncState(roomId, {
         gamePhase: 'voting',
-        players: finalPlayers,
+        players: verifiedPlayers,
       });
     }
-    broadcastState('voting', finalPlayers);
+    broadcastState('voting', verifiedPlayers);
   };
 
   // Human player submits vote
@@ -1201,14 +1298,68 @@ export default function App() {
   // Leave room / return to homepage
   const handleLeaveRoom = () => {
     sound.click();
-    if (gameMode === 'room' && roomId) {
-      socketClient.leaveRoom(roomId, myPlayerId);
+    clearBotTimeouts();
+
+    // 1. Notify server and cleanly close socket/polling connections
+    const currentRoomId = roomId;
+    const currentPlayerId = myPlayerId;
+    if (currentRoomId) {
+      socketClient.leaveRoom(currentRoomId, currentPlayerId);
+    } else {
+      socketClient.disconnect();
     }
+
+    // 2. Close BroadcastChannel fallback
+    if (broadcastChannelRef.current) {
+      try {
+        broadcastChannelRef.current.close();
+      } catch (e) {}
+      broadcastChannelRef.current = null;
+    }
+
+    // 3. Clear URL hash and query parameters
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+    inviteInfo.roomId = null;
+    inviteInfo.password = null;
+    inviteInfo.autoJoin = false;
+
+    // 4. Reset room tracking
+    setRoomId('');
+    roomIdRef.current = '';
+    setGameMode('solo');
+
+    // 5. Reset players to fresh initial solo roster
+    setPlayers(
+      INITIAL_PLAYERS.map((p) => ({
+        ...p,
+        score: 0,
+        role: 'innocent',
+        clue: '',
+        hasSubmittedClue: false,
+        votedForId: null,
+        isReady: false,
+      }))
+    );
+
+    // 6. Reset all gameplay and modal states
     setGamePhase('home');
+    gamePhaseRef.current = 'home';
     setRoundNumber(1);
     setRoundResolution(null);
     setIsResolutionModalOpen(false);
     setIsFoxGuessModalOpen(false);
+    setCaughtChameleonId(null);
+    setSecretCoordinate(null);
+    secretCoordinateRef.current = null;
+    setFoxPlayerId('');
+    setClueInput('');
+    setIsEditingClue(false);
+    setSelectedVoteTargetId(null);
+    setSelectedGuessWord(null);
+    setImpostorPeekPlayerId(null);
+    setPeerCount(0);
   };
 
   // Kick player handler for host

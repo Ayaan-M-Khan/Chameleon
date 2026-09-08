@@ -93,11 +93,14 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
           <tbody className="divide-y divide-slate-800 font-medium">
             {players.map((p) => {
               const isCurrent = p.id === activePlayerId;
-              const hasClue = Boolean(p.clue && p.hasSubmittedClue);
+              // During voting/resolution, any submitted non-empty clue is considered present
+              const hasClue = isVotingOrResolution
+                ? Boolean(p.clue && p.clue.trim() !== '')
+                : Boolean(p.clue && p.hasSubmittedClue);
               const isImpostorPeekTarget = isImpostor && p.id === impostorPeekPlayerId;
 
               // Visibility rules:
-              // 1. Voting/Resolution: all clues are public
+              // 1. Voting/Resolution: all clues are 100% public to all players!
               // 2. Clue submission:
               //    - Current active player always sees their own clue
               //    - Imposter (Chameleon) sees exactly ONE other player's clue at random
@@ -186,6 +189,8 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                           <span>🔒 Clue Locked</span>
                         </div>
                       )
+                    ) : isVotingOrResolution ? (
+                      <span className="text-slate-500 font-mono text-xs italic">No clue</span>
                     ) : (
                       <div className="inline-flex items-center gap-1.5 text-slate-500 text-xs italic">
                         <Clock className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />

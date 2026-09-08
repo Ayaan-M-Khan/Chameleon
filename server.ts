@@ -316,6 +316,28 @@ app.delete('/api/rooms/:roomId/players/:playerId', (req, res) => {
 
   room.players = room.players.filter((p) => p.id !== playerId);
   room.lastActive = Date.now();
+
+  // Clear room association from matching websockets
+  for (const [ws, meta] of clients.entries()) {
+    if (meta.roomId === roomId && meta.playerId === playerId) {
+      meta.roomId = undefined;
+      meta.playerId = undefined;
+    }
+  }
+
+  if (room.players.length === 0) {
+    rooms.delete(roomId);
+    return res.json({ success: true, message: 'Room closed since all players left' });
+  }
+
+  if (room.hostId === playerId) {
+    const nextHost = room.players.find((p) => p.isHuman) || room.players[0];
+    if (nextHost) {
+      room.hostId = nextHost.id;
+      nextHost.isHost = true;
+    }
+  }
+
   if (isKick) {
     broadcastToRoom(roomId, { type: 'PLAYER_KICKED', kickedPlayerId: playerId, room });
   } else {
@@ -437,11 +459,25 @@ async function startServer() {
           }
         } else if (data.type === 'LEAVE_ROOM') {
           const { roomId, playerId } = data;
+          meta.roomId = undefined;
+          meta.playerId = undefined;
           if (roomId && playerId) {
             const room = rooms.get(roomId);
             if (room) {
               room.players = room.players.filter((p) => p.id !== playerId);
-              broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+              room.lastActive = Date.now();
+              if (room.players.length === 0) {
+                rooms.delete(roomId);
+              } else {
+                if (room.hostId === playerId) {
+                  const nextHost = room.players.find((p) => p.isHuman) || room.players[0];
+                  if (nextHost) {
+                    room.hostId = nextHost.id;
+                    nextHost.isHost = true;
+                  }
+                }
+                broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+              }
             }
           }
         } else if (data.type === 'KICK_PLAYER') {

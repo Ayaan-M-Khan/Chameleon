@@ -13,19 +13,23 @@ class RealtimeSocketClient {
   private pingInterval: any = null;
   private isConnecting: boolean = false;
   private pollInterval: any = null;
+  private isManualDisconnect: boolean = false;
 
   public connect(roomId: string, player: Player, password?: string) {
+    this.isManualDisconnect = false;
     this.roomId = roomId;
     this.playerId = player.id;
     this.player = player;
     this.password = password;
 
     this.disconnect();
+    this.isManualDisconnect = false;
     this.initWebSocket();
     this.startPollingFallback();
   }
 
   public disconnect() {
+    this.isManualDisconnect = true;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
@@ -40,6 +44,8 @@ class RealtimeSocketClient {
     }
     if (this.ws) {
       try {
+        this.ws.onclose = null;
+        this.ws.onerror = null;
         this.ws.close();
       } catch (e) {
         // ignore
@@ -113,9 +119,13 @@ class RealtimeSocketClient {
       socket.onclose = () => {
         this.ws = null;
         if (this.pingInterval) clearInterval(this.pingInterval);
-        // Attempt reconnect after 3 seconds
+        // Do not reconnect if manually disconnected or no roomId
+        if (this.isManualDisconnect || !this.roomId) {
+          return;
+        }
+        // Attempt reconnect after 3 seconds only if room is still active
         this.reconnectTimeout = setTimeout(() => {
-          if (this.roomId) {
+          if (!this.isManualDisconnect && this.roomId) {
             this.initWebSocket();
           }
         }, 3000);
@@ -140,12 +150,12 @@ class RealtimeSocketClient {
   private startPollingFallback() {
     if (this.pollInterval) clearInterval(this.pollInterval);
     this.pollInterval = setInterval(async () => {
-      if (!this.roomId) return;
+      if (this.isManualDisconnect || !this.roomId) return;
       try {
         const res = await fetch(`/api/rooms/${encodeURIComponent(this.roomId)}`);
         if (res.ok) {
           const data = await res.json();
-          if (data && data.room) {
+          if (data && data.room && !this.isManualDisconnect && this.roomId) {
             this.emit({ type: 'ROOM_STATE_SYNC', room: data.room });
           }
         }
@@ -267,18 +277,32 @@ class RealtimeSocketClient {
   }
 
   public async leaveRoom(roomId: string, playerId: string) {
-    this.send({
-      type: 'LEAVE_ROOM',
-      roomId,
-      playerId,
-    });
-    this.disconnect();
+    const targetRoomId = roomId || this.roomId;
+    const targetPlayerId = playerId || this.playerId;
+
     try {
-      await fetch(`/api/rooms/${encodeURIComponent(roomId)}/players/${encodeURIComponent(playerId)}`, {
-        method: 'DELETE',
+      this.send({
+        type: 'LEAVE_ROOM',
+        roomId: targetRoomId,
+        playerId: targetPlayerId,
       });
-    } catch (err) {
-      console.error('Error leaving room on server:', err);
+    } catch (e) {}
+
+    // Immediately wipe internal room association
+    this.roomId = '';
+    this.playerId = '';
+    this.player = null;
+    this.password = undefined;
+    this.disconnect();
+
+    if (targetRoomId && targetPlayerId) {
+      try {
+        await fetch(`/api/rooms/${encodeURIComponent(targetRoomId)}/players/${encodeURIComponent(targetPlayerId)}`, {
+          method: 'DELETE',
+        });
+      } catch (err) {
+        console.error('Error leaving room on server:', err);
+      }
     }
   }
 }
