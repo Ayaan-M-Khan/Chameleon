@@ -200,6 +200,21 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
               </div>
             </div>
 
+            {/* Gold Reward & Shop Alert */}
+            <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/40 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-base select-none">🪙</span>
+                <span className="font-mono text-amber-200">
+                  Round Reward: <strong className="text-amber-400 font-bold">+100 Gold Coins</strong> for all players!
+                </span>
+              </div>
+              {roundNumber && roundNumber % 3 === 0 && (
+                <span className="font-mono text-[11px] font-bold text-yellow-300 bg-amber-900/80 px-2 py-0.5 rounded border border-amber-500/60 animate-pulse">
+                  🛒 Shop Open!
+                </span>
+              )}
+            </div>
+
             {/* Action Buttons */}
             <div className="pt-2 flex flex-col sm:flex-row items-center gap-2.5">
               {onClose && (
@@ -212,13 +227,23 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
                 </button>
               )}
 
-              <button
-                onClick={onNextRound}
-                className="w-full flex-1 retro-button px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-transform"
-              >
-                <span>Proceed to Next Round</span>
-                <ArrowRight className="w-4 h-4 text-slate-950" />
-              </button>
+              {roundNumber && roundNumber % 3 === 0 ? (
+                <button
+                  onClick={onNextRound}
+                  className="w-full flex-1 retro-button px-6 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-transform border-amber-300"
+                >
+                  <span>Proceed to Shop 🛒</span>
+                  <ArrowRight className="w-4 h-4 text-slate-950" />
+                </button>
+              ) : (
+                <button
+                  onClick={onNextRound}
+                  className="w-full flex-1 retro-button px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-transform"
+                >
+                  <span>Proceed to Next Round</span>
+                  <ArrowRight className="w-4 h-4 text-slate-950" />
+                </button>
+              )}
             </div>
           </motion.div>
         </div>

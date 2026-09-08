@@ -11,6 +11,8 @@ interface RightColumnGridProps {
   onSelectWordGuess?: (word: string, coordLabel: string) => void;
   selectedGuessWord?: string | null;
   isPassAndPlay?: boolean;
+  oracleHighlight?: { type: 'row' | 'col'; value: number | string } | null;
+  isScrambling?: boolean;
 }
 
 export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
@@ -22,6 +24,8 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
   onSelectWordGuess,
   selectedGuessWord,
   isPassAndPlay = false,
+  oracleHighlight = null,
+  isScrambling = false,
 }) => {
   const [showRoleSecret, setShowRoleSecret] = React.useState(!isPassAndPlay);
 
@@ -144,93 +148,151 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
         </div>
       )}
 
+      {/* Active Potion Status Banner */}
+      {oracleHighlight && (
+        <div className="mb-3 p-2 bg-purple-950/80 border-2 border-purple-500/80 rounded-lg text-purple-200 flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-2">
+            <span className="text-base select-none">🧪</span>
+            <span className="text-xs font-mono font-bold">
+              Oracle Serum Active: Target is in{' '}
+              <strong className="text-purple-300 underline font-black">
+                {oracleHighlight.type === 'row' ? `Row ${oracleHighlight.value}` : `Column ${oracleHighlight.value}`}
+              </strong>
+            </span>
+          </div>
+          <span className="text-[10px] font-mono font-extrabold uppercase bg-purple-900 px-2 py-0.5 rounded border border-purple-400">
+            Revealed
+          </span>
+        </div>
+      )}
+
+      {isScrambling && (
+        <div className="mb-3 p-2 bg-cyan-950/80 border-2 border-cyan-400 rounded-lg text-cyan-200 flex items-center justify-between shadow-md animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="text-base select-none animate-spin">🌀</span>
+            <span className="text-xs font-mono font-bold">
+              Grid Scrambler Active: Matrix positions shifting!
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* 4x4 Grid Matrix Container */}
-      <div className="flex-1 flex flex-col justify-center">
+      <div className={`flex-1 flex flex-col justify-center ${isScrambling ? 'animate-scramble' : ''}`}>
         {/* Labeled Column Headers: A, B, C, D */}
         <div className="grid grid-cols-[36px_repeat(4,1fr)] gap-1.5 mb-1.5 text-center font-display font-bold text-slate-300 text-xs sm:text-sm">
           <div className="flex items-center justify-center font-mono text-[10px] text-slate-500">
             #
           </div>
-          {colHeaders.map((col) => (
-            <div
-              key={col}
-              className="py-1 bg-slate-800 border border-slate-700 rounded font-mono font-extrabold text-slate-200 shadow-xs"
-            >
-              {col}
-            </div>
-          ))}
+          {colHeaders.map((col) => {
+            const isColOracle = oracleHighlight?.type === 'col' && oracleHighlight.value === col;
+            return (
+              <div
+                key={col}
+                className={`py-1 rounded font-mono font-extrabold shadow-xs transition-colors ${
+                  isColOracle
+                    ? 'bg-purple-900 border-2 border-purple-400 text-purple-200 ring-1 ring-purple-400'
+                    : 'bg-slate-800 border border-slate-700 text-slate-200'
+                }`}
+              >
+                {col}
+              </div>
+            );
+          })}
         </div>
 
         {/* Rows 1 to 4 with Row Numbers */}
         <div className="space-y-1.5">
-          {rowNumbers.map((rowNum, rIdx) => (
-            <div key={rowNum} className="grid grid-cols-[36px_repeat(4,1fr)] gap-1.5 items-stretch">
-              {/* Row Number Header */}
-              <div className="flex items-center justify-center bg-slate-800 border border-slate-700 rounded font-mono font-extrabold text-slate-200 text-xs sm:text-sm shadow-xs">
-                {rowNum}
-              </div>
+          {rowNumbers.map((rowNum, rIdx) => {
+            const isRowOracle = oracleHighlight?.type === 'row' && oracleHighlight.value === rowNum;
+            return (
+              <div key={rowNum} className="grid grid-cols-[36px_repeat(4,1fr)] gap-1.5 items-stretch">
+                {/* Row Number Header */}
+                <div
+                  className={`flex items-center justify-center rounded font-mono font-extrabold text-xs sm:text-sm shadow-xs transition-colors ${
+                    isRowOracle
+                      ? 'bg-purple-900 border-2 border-purple-400 text-purple-200 ring-1 ring-purple-400'
+                      : 'bg-slate-800 border border-slate-700 text-slate-200'
+                  }`}
+                >
+                  {rowNum}
+                </div>
 
-              {/* 4 Cells for this row */}
-              {colHeaders.map((colChar, cIdx) => {
-                const item = getItemAt(rIdx, cIdx);
-                const coordLabel = `${colChar}${rowNum}`;
-                const isTarget = !isFox && showRoleSecret && isTargetCell(rowNum, colChar);
-                const isSelectedForGuess = selectedGuessWord === item;
+                {/* 4 Cells for this row */}
+                {colHeaders.map((colChar, cIdx) => {
+                  const item = getItemAt(rIdx, cIdx);
+                  const coordLabel = `${colChar}${rowNum}`;
+                  const isTarget = !isFox && showRoleSecret && isTargetCell(rowNum, colChar);
+                  const isSelectedForGuess = selectedGuessWord === item;
+                  const isOracleHighlighted =
+                    Boolean(oracleHighlight) &&
+                    ((oracleHighlight?.type === 'row' && oracleHighlight.value === rowNum) ||
+                      (oracleHighlight?.type === 'col' && oracleHighlight.value === colChar));
 
-                // Alternating subtle tone inside matrix
-                const isEvenCell = (rIdx + cIdx) % 2 === 0;
+                  // Alternating subtle tone inside matrix
+                  const isEvenCell = (rIdx + cIdx) % 2 === 0;
 
-                return (
-                  <button
-                    key={coordLabel}
-                    disabled={!isFoxGuesser}
-                    onClick={() => {
-                      if (isFoxGuesser && onSelectWordGuess) {
-                        onSelectWordGuess(item, coordLabel);
-                      }
-                    }}
-                    className={`relative p-2 sm:p-2.5 rounded-lg border-2 text-left transition-all flex flex-col justify-between min-h-[58px] sm:min-h-[64px] ${
-                      isTarget
-                        ? 'bg-emerald-950/90 border-emerald-400 ring-2 ring-emerald-400 ring-offset-1 ring-offset-slate-900 text-emerald-200 font-bold shadow-md'
-                        : isSelectedForGuess
-                        ? 'bg-amber-400 border-amber-300 text-slate-950 font-black ring-2 ring-amber-400 scale-[1.02] shadow-md'
-                        : isEvenCell
-                        ? 'bg-slate-800/90 border-slate-700 hover:border-slate-500 text-slate-100'
-                        : 'bg-slate-800/60 border-slate-700 hover:border-slate-500 text-slate-100'
-                    } ${
-                      isFoxGuesser
-                        ? 'cursor-pointer hover:border-amber-400 hover:bg-slate-700 hover:scale-[1.01] active:scale-[0.98]'
-                        : 'cursor-default'
-                    }`}
-                  >
-                    {/* Coordinate micro-label */}
-                    <div className="flex items-center justify-between w-full">
-                      <span
-                        className={`text-[9px] sm:text-[10px] font-mono font-bold leading-none ${
-                          isTarget
-                            ? 'text-emerald-400'
-                            : 'text-slate-400'
-                        }`}
-                      >
-                        {coordLabel}
-                      </span>
-                      {isTarget && (
-                        <span className="flex h-1.5 w-1.5 relative">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+                  return (
+                    <button
+                      key={coordLabel}
+                      disabled={!isFoxGuesser}
+                      onClick={() => {
+                        if (isFoxGuesser && onSelectWordGuess) {
+                          onSelectWordGuess(item, coordLabel);
+                        }
+                      }}
+                      className={`relative p-2 sm:p-2.5 rounded-lg border-2 text-left transition-all flex flex-col justify-between min-h-[58px] sm:min-h-[64px] ${
+                        isTarget
+                          ? 'bg-emerald-950/90 border-emerald-400 ring-2 ring-emerald-400 ring-offset-1 ring-offset-slate-900 text-emerald-200 font-bold shadow-md'
+                          : isSelectedForGuess
+                          ? 'bg-amber-400 border-amber-300 text-slate-950 font-black ring-2 ring-amber-400 scale-[1.02] shadow-md'
+                          : isOracleHighlighted
+                          ? 'ring-2 ring-purple-400 bg-purple-950/40 border-purple-400 text-purple-200 font-bold shadow-md'
+                          : isEvenCell
+                          ? 'bg-slate-800/90 border-slate-700 hover:border-slate-500 text-slate-100'
+                          : 'bg-slate-800/60 border-slate-700 hover:border-slate-500 text-slate-100'
+                      } ${
+                        isFoxGuesser
+                          ? 'cursor-pointer hover:border-amber-400 hover:bg-slate-700 hover:scale-[1.01] active:scale-[0.98]'
+                          : 'cursor-default'
+                      }`}
+                    >
+                      {/* Coordinate micro-label */}
+                      <div className="flex items-center justify-between w-full">
+                        <span
+                          className={`text-[9px] sm:text-[10px] font-mono font-bold leading-none ${
+                            isTarget
+                              ? 'text-emerald-400'
+                              : isOracleHighlighted
+                              ? 'text-purple-300 font-black'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {coordLabel}
                         </span>
-                      )}
-                    </div>
+                        {isTarget && (
+                          <span className="flex h-1.5 w-1.5 relative">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+                          </span>
+                        )}
+                        {isOracleHighlighted && !isTarget && (
+                          <span className="text-[10px] select-none text-purple-400">
+                            ✦
+                          </span>
+                        )}
+                      </div>
 
-                    {/* Word text */}
-                    <span className="text-xs sm:text-sm font-semibold tracking-tight leading-tight line-clamp-2 mt-1">
-                      {item}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+                      {/* Word text */}
+                      <span className="text-xs sm:text-sm font-semibold tracking-tight leading-tight line-clamp-2 mt-1">
+                        {item}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       </div>
 

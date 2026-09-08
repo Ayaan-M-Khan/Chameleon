@@ -1,18 +1,26 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Clock, Bot, User, HelpCircle } from 'lucide-react';
-import { Player, GamePhase } from '../types';
+import { Check, Clock, Bot, User, HelpCircle, Shield, Sparkles } from 'lucide-react';
+import { Player, GamePhase, PlayerInventory } from '../types';
+import { POTION_CATALOG } from '../data/potions';
 
 interface LeftColumnTableProps {
   players: Player[];
   activePlayerId: string;
   activePlayerRole?: 'innocent' | 'fox';
   impostorPeekPlayerId?: string | null;
+  clueLensPeekPlayerId?: string | null;
+  activeVoteShields?: string[];
   gamePhase: GamePhase;
   anonymousVoting: boolean;
   onSelectVoteTarget?: (targetId: string) => void;
   selectedVoteTargetId?: string | null;
   canVoteNow: boolean;
+  hasUsedPotionThisTurn?: boolean;
+  onUsePotion?: (potionId: string) => void;
+  recentlyUsedPotionPlayerId?: string | null;
+  inventory?: PlayerInventory;
+  gold?: number;
 }
 
 export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
@@ -20,15 +28,22 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
   activePlayerId,
   activePlayerRole = 'innocent',
   impostorPeekPlayerId = null,
+  clueLensPeekPlayerId = null,
+  activeVoteShields = [],
   gamePhase,
   anonymousVoting,
   onSelectVoteTarget,
   selectedVoteTargetId,
   canVoteNow,
+  hasUsedPotionThisTurn = false,
+  onUsePotion,
+  recentlyUsedPotionPlayerId = null,
+  inventory = {},
+  gold = 0,
 }) => {
   // During clue submission:
   // - Innocents see ONLY their own clue
-  // - Imposter sees their own clue + exactly 1 random other player's clue
+  // - Imposter sees their own clue + exactly 1 random other player's clue (+ 2nd clue if clue lens used)
   // When voting or resolution, clues are fully public to all players!
   const isVotingOrResolution = gamePhase === 'voting' || gamePhase === 'fox_guess' || gamePhase === 'round_resolution';
   const isImpostor = activePlayerRole === 'fox';
@@ -36,6 +51,18 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
   // Clues submitted & votes cast counts
   const cluesSubmittedCount = players.filter((p) => p.hasSubmittedClue).length;
   const votesCastCount = players.filter((p) => Boolean(p.votedForId)).length;
+
+  // Filter potions for inventory panel
+  const compatiblePotions = POTION_CATALOG.filter((item) => {
+    const matchesRole = item.roleTarget === 'all' ||
+      (item.roleTarget === 'fox' && isImpostor) ||
+      (item.roleTarget === 'innocent' && !isImpostor);
+    const quantity = inventory[item.id] || 0;
+    return matchesRole && quantity > 0;
+  }).map((item) => ({
+    potion: item,
+    quantity: inventory[item.id] || 0,
+  }));
 
   return (
     <div className="retro-card rounded-xl p-4 sm:p-5 flex flex-col h-full bg-[#131B2E] border-2 border-slate-700 text-slate-100 shadow-xl overflow-hidden">
@@ -98,29 +125,33 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                 ? Boolean(p.clue && p.clue.trim() !== '')
                 : Boolean(p.clue && p.hasSubmittedClue);
               const isImpostorPeekTarget = isImpostor && p.id === impostorPeekPlayerId;
+              const isClueLensTarget = isImpostor && p.id === clueLensPeekPlayerId;
 
               // Visibility rules:
               // 1. Voting/Resolution: all clues are 100% public to all players!
               // 2. Clue submission:
               //    - Current active player always sees their own clue
-              //    - Imposter (Chameleon) sees exactly ONE other player's clue at random
+              //    - Imposter (Chameleon) sees exactly ONE other player's clue at random (+ 2nd clue if Clue Lens active)
               //    - Innocents see NO other players' clues
               const isClueVisible =
                 isVotingOrResolution ||
                 isCurrent ||
-                (gamePhase === 'clue_submission' && isImpostorPeekTarget);
+                (gamePhase === 'clue_submission' && (isImpostorPeekTarget || isClueLensTarget));
 
               // Voting indicator logic
               const votedTarget = players.find(target => target.id === p.votedForId);
               const isClickableTarget = canVoteNow && p.id !== activePlayerId;
               const isSelectedTarget = selectedVoteTargetId === p.id;
+              const isShielded = activeVoteShields.includes(p.id);
 
               return (
                 <tr
                   key={p.id}
                   className={`transition-colors ${
                     isCurrent ? 'bg-slate-800/70 border-l-2 border-l-emerald-400' : 'hover:bg-slate-800/40'
-                  } ${isSelectedTarget ? 'ring-2 ring-rose-500 bg-rose-950/30' : ''}`}
+                  } ${isSelectedTarget ? 'ring-2 ring-rose-500 bg-rose-950/30' : ''} ${
+                    recentlyUsedPotionPlayerId === p.id ? 'animate-potion-bubble ring-2 ring-purple-400' : ''
+                  }`}
                 >
                   {/* Player info */}
                   <td className="py-3 px-2 sm:px-3 align-middle overflow-hidden">
@@ -136,6 +167,11 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                           {isCurrent && (
                             <span className="text-[10px] bg-emerald-500 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase tracking-tighter shrink-0">
                               YOU
+                            </span>
+                          )}
+                          {isShielded && (
+                            <span className="text-[10px] bg-sky-950 text-sky-300 border border-sky-600 px-1 rounded font-mono font-bold flex items-center gap-0.5 shrink-0" title="Vote Shield Active (-1 vote against you)">
+                              <Shield className="w-2.5 h-2.5 text-sky-400" /> Shielded
                             </span>
                           )}
                         </div>
@@ -174,6 +210,8 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                           className={`w-full ${
                             isImpostorPeekTarget && gamePhase === 'clue_submission'
                               ? 'bg-purple-950/70 border-purple-500/80 text-purple-200 shadow-sm'
+                              : isClueLensTarget && gamePhase === 'clue_submission'
+                              ? 'bg-cyan-950/70 border-cyan-400/80 text-cyan-200 shadow-sm'
                               : 'bg-amber-950/50 border-amber-500/50 text-amber-200'
                           } border font-bold px-2.5 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-mono tracking-tight shadow-xs break-words [overflow-wrap:anywhere] [word-break:break-word] whitespace-normal leading-relaxed overflow-hidden`}
                         >
@@ -181,6 +219,11 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                           {isImpostorPeekTarget && gamePhase === 'clue_submission' && (
                             <span className="block mt-1 text-[10px] font-sans font-extrabold uppercase tracking-wider text-purple-300">
                               🦎 Chameleon Intel (1 Clue)
+                            </span>
+                          )}
+                          {isClueLensTarget && gamePhase === 'clue_submission' && (
+                            <span className="block mt-1 text-[10px] font-sans font-extrabold uppercase tracking-wider text-cyan-300">
+                              👁️ Clue Lens Intel (2nd Clue)
                             </span>
                           )}
                         </div>
@@ -269,8 +312,87 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
         </table>
       </div>
 
+      {/* 🧪 POTIONS & ITEMS (1 use per turn) */}
+      <div className="mt-3 pt-3 border-t-2 border-slate-700/80">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-base select-none">🧪</span>
+            <h3 className="text-xs sm:text-sm font-display font-black uppercase tracking-wider text-purple-200">
+              POTIONS & ITEMS
+            </h3>
+            <span className="text-[10px] font-mono text-slate-400">
+              (1 use per turn)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs font-mono">
+            <span className="text-amber-400 font-bold bg-amber-950/80 px-2 py-0.5 rounded border border-amber-600/60">
+              🪙 {gold}g
+            </span>
+            {hasUsedPotionThisTurn ? (
+              <span className="text-[10px] font-bold text-amber-300 bg-amber-950/80 border border-amber-600 px-1.5 py-0.5 rounded">
+                Used This Turn ✓
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-600 px-1.5 py-0.5 rounded">
+                Ready
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Potion List */}
+        {compatiblePotions.length > 0 ? (
+          <div className="space-y-1.5">
+            {compatiblePotions.map(({ potion, quantity }) => (
+              <div
+                key={potion.id}
+                className="flex items-center justify-between p-2 rounded-xl bg-slate-900/90 border border-purple-500/40 text-xs shadow-xs"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xl select-none shrink-0">{potion.icon}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-white text-xs truncate">
+                        {potion.name}
+                      </span>
+                      <span className="font-mono text-purple-300 font-black text-[11px] bg-purple-950 px-1.5 py-0.2 rounded border border-purple-700">
+                        x{quantity}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 block truncate">
+                      {potion.description}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  disabled={hasUsedPotionThisTurn}
+                  onClick={() => onUsePotion?.(potion.id)}
+                  className={`ml-2 px-3 py-1.5 rounded-lg text-[11px] font-display font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
+                    hasUsedPotionThisTurn
+                      ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-50'
+                      : 'retro-button bg-purple-600 hover:bg-purple-500 active:scale-95 text-white border-purple-400 shadow-xs'
+                  }`}
+                  title={hasUsedPotionThisTurn ? 'Already used 1 potion this turn' : `Use ${potion.name}`}
+                >
+                  USE
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800 text-center text-xs text-slate-400 flex items-center justify-between px-3">
+            <span>No role potions in inventory.</span>
+            <span className="text-[10px] font-mono text-amber-300 font-bold">
+              Shop opens every 3 rounds! 🛒
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* Footer Info Pill */}
-      <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+      <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
         <div className="flex items-center gap-1">
           <HelpCircle className="w-3.5 h-3.5 text-slate-500" />
           <span>Each player gives <strong>one clue</strong> (up to 80 chars) related to the coordinate.</span>

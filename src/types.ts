@@ -1,5 +1,18 @@
 export type PlayerRole = 'innocent' | 'fox';
 
+export interface PotionItem {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  roleTarget: 'fox' | 'innocent' | 'all';
+  icon: string;
+}
+
+export interface PlayerInventory {
+  [potionId: string]: number;
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -7,6 +20,8 @@ export interface Player {
   isHost: boolean;
   avatar: string;
   score: number;
+  gold?: number;
+  inventory?: PlayerInventory;
   role: PlayerRole;
   clue: string;
   hasSubmittedClue: boolean;
@@ -62,7 +77,8 @@ export type GamePhase =
   | 'clue_submission'
   | 'voting'
   | 'fox_guess'
-  | 'round_resolution';
+  | 'round_resolution'
+  | 'shop';
 
 export interface RoundResolution {
   winner: 'innocents' | 'fox';

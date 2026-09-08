@@ -165,6 +165,58 @@ class SoundFX {
       // Ignore audio errors
     }
   }
+
+  // Potion consume bubbling arpeggio
+  potionDrink() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      const notes = [330, 440, 554.37, 659.25, 880, 1108.73];
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.045);
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.08, now + idx * 0.045 + 0.12);
+
+        gain.gain.setValueAtTime(0.08, now + idx * 0.045);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.045 + 0.15);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.045);
+        osc.stop(now + idx * 0.045 + 0.15);
+      });
+    } catch {
+      // Ignore audio errors
+    }
+  }
+
+  // Powerup / grid scramble magical chime
+  powerup() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.04);
+
+        gain.gain.setValueAtTime(0.09, now + idx * 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.28);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.04);
+        osc.stop(now + idx * 0.04 + 0.28);
+      });
+    } catch {
+      // Ignore audio errors
+    }
+  }
 }
 
 export const sound = new SoundFX();
