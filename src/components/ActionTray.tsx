@@ -274,16 +274,21 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
             {hasCurrentPlayerVoted && (
               <div className="p-3.5 bg-purple-950/70 border-2 border-purple-500/80 rounded-xl text-purple-100 shadow-md mb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <CheckCircle2 className="w-4 h-4 text-purple-300 shrink-0" />
                     <div>
-                      <span className="font-bold text-xs sm:text-sm text-purple-200">Your accusation vote is locked: </span>
+                      <span className="font-bold text-xs sm:text-sm text-purple-200">Your current vote: </span>
                       <span className="font-mono font-black text-xs sm:text-sm bg-purple-900/90 px-2 py-0.5 rounded border border-purple-400 text-yellow-300">
                         👉 {votedTarget?.name || 'Selected'}
                       </span>
                     </div>
+                    {!allVotesSubmitted && (
+                      <span className="text-[11px] bg-slate-900/80 text-purple-300 border border-purple-600/50 px-2 py-0.5 rounded font-medium">
+                        💡 You can change your vote below until the final person casts theirs
+                      </span>
+                    )}
                   </div>
-                  <span className="text-[11px] font-mono text-purple-300 font-semibold">
+                  <span className="text-[11px] font-mono text-purple-300 font-semibold shrink-0">
                     {votesCastCount} of {totalPlayers} votes recorded
                   </span>
                 </div>
@@ -325,7 +330,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                   return (
                     <button
                       key={p.id}
-                      disabled={hasCurrentPlayerVoted}
+                      disabled={allVotesSubmitted}
                       onClick={() => onSelectVoteTarget(p.id)}
                       className={`p-2.5 rounded-lg border-2 text-left transition-all flex items-center gap-2 ${
                         isMyVotedTarget
@@ -333,12 +338,19 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                           : isSelected
                           ? 'bg-rose-600 border-rose-400 text-white shadow-md scale-[1.02]'
                           : 'bg-slate-800 hover:bg-slate-700/80 border-slate-700 text-white shadow-xs'
-                      } ${hasCurrentPlayerVoted ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                      } ${allVotesSubmitted ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                     >
                       <span className="text-xl shrink-0">{p.avatar}</span>
                       <div className="min-w-0">
-                        <div className="font-bold text-xs truncate leading-tight">
-                          {p.name}
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-xs truncate leading-tight">
+                            {p.name}
+                          </span>
+                          {isMyVotedTarget && (
+                            <span className="text-[9px] bg-purple-950 text-yellow-300 font-bold px-1 rounded">
+                              ✓ Voted
+                            </span>
+                          )}
                         </div>
                         <div className={`text-[10px] font-mono truncate ${isSelected || isMyVotedTarget ? 'text-rose-100' : 'text-slate-400'}`}>
                           "{p.clue || '...'}"
@@ -349,17 +361,46 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                 })}
             </div>
 
-            {/* Confirm Vote Button */}
-            {!hasCurrentPlayerVoted && (
-              <div className="flex justify-end">
-                <button
-                  onClick={onSubmitVote}
-                  disabled={!selectedVoteTargetId}
-                  className="retro-button px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50 disabled:pointer-events-none rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 shadow-md cursor-pointer"
-                >
-                  <AlertOctagon className="w-4 h-4" />
-                  <span>Cast Vote Accusation</span>
-                </button>
+            {/* Confirm or Change Vote Button */}
+            {!allVotesSubmitted && (
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="text-xs text-slate-300">
+                  {selectedVoteTargetId && selectedVoteTargetId !== activePlayer.votedForId ? (
+                    <span>
+                      Target selected:{' '}
+                      <strong className="text-rose-400 font-bold">
+                        {players.find((p) => p.id === selectedVoteTargetId)?.name}
+                      </strong>
+                    </span>
+                  ) : hasCurrentPlayerVoted ? (
+                    <span className="text-purple-300 text-[11px]">
+                      Click any player card above to change your accusation before the round locks.
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {hasCurrentPlayerVoted ? (
+                    selectedVoteTargetId && selectedVoteTargetId !== activePlayer.votedForId ? (
+                      <button
+                        onClick={onSubmitVote}
+                        className="retro-button px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 shadow-md cursor-pointer"
+                      >
+                        <AlertOctagon className="w-4 h-4" />
+                        <span>Update Vote Accusation</span>
+                      </button>
+                    ) : null
+                  ) : (
+                    <button
+                      onClick={onSubmitVote}
+                      disabled={!selectedVoteTargetId}
+                      className="retro-button px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50 disabled:pointer-events-none rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 shadow-md cursor-pointer"
+                    >
+                      <AlertOctagon className="w-4 h-4" />
+                      <span>Cast Vote Accusation</span>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -372,7 +413,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-2xl">🦊</span>
+                <span className="text-2xl">🦎</span>
                 <div>
                   <h3 className="font-display font-black text-base uppercase text-yellow-300">
                     Chameleon's Last Stand: {caughtFoxPlayer?.name || 'The Chameleon'} is Caught!

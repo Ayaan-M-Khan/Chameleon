@@ -241,6 +241,21 @@ class RealtimeSocketClient {
     }
   }
 
+  public async kickPlayer(roomId: string, playerId: string) {
+    this.send({
+      type: 'KICK_PLAYER',
+      roomId,
+      playerId,
+    });
+    try {
+      await fetch(`/api/rooms/${encodeURIComponent(roomId)}/players/${encodeURIComponent(playerId)}?kick=true`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.error('Error kicking player on server:', err);
+    }
+  }
+
   public async removePlayer(roomId: string, playerId: string) {
     try {
       await fetch(`/api/rooms/${encodeURIComponent(roomId)}/players/${encodeURIComponent(playerId)}`, {

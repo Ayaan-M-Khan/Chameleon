@@ -71,23 +71,23 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
         </div>
       </div>
 
-      {/* Expanded Table container with strict column containment and no scroll overflow */}
-      <div className="w-full flex-1 overflow-hidden">
-        <table className="w-full table-fixed text-left border-collapse text-xs sm:text-sm">
+      {/* Expanded Table container with responsive horizontal scroll and generous column containment */}
+      <div className="w-full flex-1 overflow-x-auto overflow-y-auto min-h-[220px]">
+        <table className="w-full min-w-[560px] sm:min-w-full table-fixed text-left border-collapse text-xs sm:text-sm">
           <colgroup>
-            <col className="w-[26%] sm:w-[24%]" />
-            <col className="w-[14%] sm:w-[12%]" />
-            <col className="w-[38%] sm:w-[42%]" />
-            <col className="w-[12%] sm:w-[10%]" />
-            <col className="w-[10%] sm:w-[12%]" />
+            <col className="w-[23%] sm:w-[21%]" />
+            <col className="w-[11%] sm:w-[10%]" />
+            <col className="w-[36%] sm:w-[37%]" />
+            <col className="w-[8%] sm:w-[8%]" />
+            <col className="w-[22%] sm:w-[24%]" />
           </colgroup>
           <thead>
             <tr className="border-b-2 border-slate-700 bg-slate-800/90 text-slate-300 font-display font-bold uppercase text-[11px] sm:text-xs tracking-wider">
               <th className="py-3 px-2 sm:px-3 text-left rounded-tl-lg">Player</th>
               <th className="py-3 px-1 sm:px-2 text-center">Score</th>
               <th className="py-3 px-2 sm:px-3 text-left">Word / Clue</th>
-              <th className="py-3 px-1 sm:px-2 text-center">Ready (✓)</th>
-              <th className="py-3 px-2 sm:px-3 text-center sm:text-right rounded-tr-lg">Vote</th>
+              <th className="py-3 px-1 sm:px-2 text-center">Ready</th>
+              <th className="py-3 px-2 sm:px-3 text-right rounded-tr-lg">Decision / Vote</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800 font-medium">
@@ -194,8 +194,8 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                     )}
                   </td>
 
-                  {/* Ready (✓) - Strictly centered and well inside the container */}
-                  <td className="py-3 px-1 sm:px-2 text-center align-middle whitespace-nowrap overflow-hidden">
+                  {/* Ready (✓) - Strictly centered */}
+                  <td className="py-3 px-1 sm:px-2 text-center align-middle whitespace-nowrap">
                     <div className="flex items-center justify-center">
                       {p.hasSubmittedClue || p.isReady ? (
                         <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/60 font-bold text-xs shadow-xs" title="Clue ready">
@@ -209,50 +209,53 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Vote column */}
-                  <td className="py-3 px-2 sm:px-3 text-center sm:text-right align-middle overflow-hidden">
-                    {gamePhase === 'voting' ? (
-                      // Voting in progress
-                      p.votedForId ? (
-                        anonymousVoting ? (
-                          <span className="inline-flex items-center gap-1 bg-purple-950 text-purple-300 border border-purple-700 px-2 py-0.5 rounded text-[11px] font-bold">
-                            <Check className="w-3 h-3" /> Voted
-                          </span>
+                  {/* Vote column with generous space and no cutoff */}
+                  <td className="py-3 px-2 sm:px-3 text-right align-middle">
+                    <div className="flex items-center justify-end gap-1.5 flex-wrap sm:flex-nowrap">
+                      {gamePhase === 'voting' ? (
+                        // Voting in progress
+                        p.votedForId ? (
+                          anonymousVoting ? (
+                            <span className="inline-flex items-center gap-1 bg-purple-950 text-purple-300 border border-purple-700 px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap shadow-xs">
+                              <Check className="w-3 h-3 text-purple-400" /> Voted
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-rose-950/90 text-rose-200 border border-rose-700 px-2 py-0.5 rounded text-[11px] font-bold font-mono whitespace-nowrap shadow-xs" title={`Voted for ${votedTarget?.name || 'Unknown'}`}>
+                              👉 {votedTarget?.name.split(' ')[0] || 'Unknown'}
+                            </span>
+                          )
                         ) : (
-                          <span className="inline-flex items-center gap-1 bg-rose-950 text-rose-300 border border-rose-700 px-2 py-0.5 rounded text-[11px] font-bold font-mono truncate">
-                            👉 {votedTarget?.name.split(' ')[0] || 'Unknown'}
+                          <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 bg-amber-950/40 border border-amber-800/60 px-2 py-0.5 rounded font-medium italic whitespace-nowrap">
+                            <Clock className="w-3 h-3 animate-spin text-amber-400 shrink-0" /> Deciding…
                           </span>
                         )
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-400/90 font-medium italic">
-                          <Clock className="w-3 h-3 animate-spin text-amber-400" /> Deciding…
-                        </span>
-                      )
-                    ) : isVotingOrResolution ? (
-                      p.votedForId ? (
-                        <span className="inline-flex items-center gap-1 bg-rose-950 text-rose-300 border border-rose-700 px-2 py-0.5 rounded text-[11px] font-bold font-mono truncate">
-                          👉 {votedTarget?.name.split(' ')[0] || 'Pass'}
-                        </span>
+                      ) : isVotingOrResolution ? (
+                        p.votedForId ? (
+                          <span className="inline-flex items-center gap-1 bg-rose-950/90 text-rose-200 border border-rose-700 px-2 py-0.5 rounded text-[11px] font-bold font-mono whitespace-nowrap shadow-xs">
+                            👉 {votedTarget?.name.split(' ')[0] || 'Pass'}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-slate-500 italic">—</span>
+                        )
                       ) : (
                         <span className="text-[11px] text-slate-500 italic">—</span>
-                      )
-                    ) : (
-                      <span className="text-[11px] text-slate-500 italic">—</span>
-                    )}
+                      )}
 
-                    {/* Quick vote button if user is choosing targets */}
-                    {isClickableTarget && (
-                      <button
-                        onClick={() => onSelectVoteTarget?.(p.id)}
-                        className={`mt-1 sm:mt-0 sm:ml-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg border transition-all ${
-                          isSelectedTarget
-                            ? 'bg-rose-600 text-white border-rose-500 shadow-xs'
-                            : 'bg-slate-800 hover:bg-rose-950 text-slate-200 border-slate-600 hover:border-rose-500'
-                        }`}
-                      >
-                        {isSelectedTarget ? 'Targeted' : 'Accuse'}
-                      </button>
-                    )}
+                      {/* Quick vote / accuse button if user can vote or change vote */}
+                      {isClickableTarget && (
+                        <button
+                          onClick={() => onSelectVoteTarget?.(p.id)}
+                          className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg border transition-all shrink-0 cursor-pointer whitespace-nowrap ${
+                            isSelectedTarget
+                              ? 'bg-rose-600 text-white border-rose-400 shadow-md ring-1 ring-rose-300'
+                              : 'bg-slate-800 hover:bg-rose-950 text-slate-200 border-slate-600 hover:border-rose-500'
+                          }`}
+                          title={`Select ${p.name} as Chameleon accusation`}
+                        >
+                          {isSelectedTarget ? 'Selected' : 'Accuse'}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

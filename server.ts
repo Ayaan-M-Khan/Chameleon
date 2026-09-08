@@ -307,15 +307,20 @@ app.post('/api/rooms/:roomId/bot', (req, res) => {
   res.json({ success: true, room });
 });
 
-// Remove player from room
+// Remove or kick player from room
 app.delete('/api/rooms/:roomId/players/:playerId', (req, res) => {
   const { roomId, playerId } = req.params;
+  const isKick = req.query.kick === 'true' || req.body?.isKick;
   const room = rooms.get(roomId);
   if (!room) return res.status(404).json({ error: 'Room not found' });
 
   room.players = room.players.filter((p) => p.id !== playerId);
   room.lastActive = Date.now();
-  broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+  if (isKick) {
+    broadcastToRoom(roomId, { type: 'PLAYER_KICKED', kickedPlayerId: playerId, room });
+  } else {
+    broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+  }
   res.json({ success: true, room });
 });
 
@@ -437,6 +442,16 @@ async function startServer() {
             if (room) {
               room.players = room.players.filter((p) => p.id !== playerId);
               broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+            }
+          }
+        } else if (data.type === 'KICK_PLAYER') {
+          const { roomId, playerId } = data;
+          if (roomId && playerId) {
+            const room = rooms.get(roomId);
+            if (room) {
+              room.players = room.players.filter((p) => p.id !== playerId);
+              room.lastActive = Date.now();
+              broadcastToRoom(roomId, { type: 'PLAYER_KICKED', kickedPlayerId: playerId, room });
             }
           }
         }

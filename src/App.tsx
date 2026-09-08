@@ -25,7 +25,7 @@ import { ActionTray } from './components/ActionTray';
 import { LobbyView } from './components/LobbyView';
 import { OptionsModal } from './components/OptionsModal';
 import { RulesModal } from './components/RulesModal';
-import { FoxGuessModal } from './components/FoxGuessModal';
+import { ChameleonGuessModal } from './components/ChameleonGuessModal';
 import { RoundResolutionModal } from './components/RoundResolutionModal';
 import { PassAndPlayModal } from './components/PassAndPlayModal';
 import { HomeView } from './components/HomeView';
@@ -64,7 +64,7 @@ const INITIAL_PLAYERS: Player[] = [
     name: 'You',
     isHuman: true,
     isHost: true,
-    avatar: '🦊',
+    avatar: '🦎',
     score: 0,
     role: 'innocent',
     clue: '',
@@ -186,6 +186,7 @@ export default function App() {
   const [isRulesOpen, setIsRulesOpen] = useState(false);
   const [isFoxGuessModalOpen, setIsFoxGuessModalOpen] = useState(false);
   const [isResolutionModalOpen, setIsResolutionModalOpen] = useState(false);
+  const [caughtChameleonId, setCaughtChameleonId] = useState<string | null>(null);
 
   // Pass and play states
   const [passAndPlayIndex, setPassAndPlayIndex] = useState(0);
@@ -198,7 +199,7 @@ export default function App() {
   // Active player is this client's player (or pass and play current turn)
   const myPlayer = players.find((p) => p.id === myPlayerId) || players[0] || INITIAL_PLAYERS[0];
   const activePlayer =
-    gameMode === 'pass_and_play' && gamePhase === 'clue_submission'
+    gameMode === 'pass_and_play' && (gamePhase === 'clue_submission' || gamePhase === 'fox_guess')
       ? players[passAndPlayIndex] || myPlayer
       : myPlayer;
 
@@ -261,13 +262,22 @@ export default function App() {
         setSettings((prev) => ({ ...prev, ...event.settings }));
       } else if ((event.type === 'PLAYER_JOINED' || event.type === 'PLAYER_LEFT') && event.room) {
         if (event.room.players) setPlayers(event.room.players);
+      } else if (event.type === 'PLAYER_KICKED') {
+        if (event.kickedPlayerId === myPlayerId) {
+          alert('You were removed from the party by the host.');
+          handleLeaveRoom();
+          return;
+        }
+        if (event.room?.players) {
+          setPlayers(event.room.players);
+        }
       }
     });
 
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [myPlayerId]);
 
   // Setup BroadcastChannel for Room Multiplayer fallback
   useEffect(() => {
@@ -416,6 +426,7 @@ export default function App() {
     setSelectedVoteTargetId(null);
     setSelectedGuessWord(null);
     setRoundResolution(null);
+    setCaughtChameleonId(null);
     setIsFoxGuessModalOpen(false);
     setIsResolutionModalOpen(false);
 
@@ -765,7 +776,7 @@ export default function App() {
     if (updated.every((p) => Boolean(p.votedForId))) {
       setTimeout(() => {
         evaluateVotingTally(updated);
-      }, 800);
+      }, 250);
     }
   };
 
@@ -785,7 +796,7 @@ export default function App() {
       // Everyone has voted now, evaluate tally
       setTimeout(() => {
         evaluateVotingTally(updated);
-      }, 700);
+      }, 250);
       return updated;
     });
   };
@@ -799,12 +810,12 @@ export default function App() {
       if (currentPlayers.every((p) => Boolean(p.votedForId))) {
         setTimeout(() => {
           evaluateVotingTally(currentPlayers);
-        }, 800);
+        }, 250);
       }
       return;
     }
 
-    let delay = 450;
+    let delay = 200;
     unvotedBots.forEach((bot, idx) => {
       setTimeout(() => {
         setPlayers((prev) => {
@@ -836,15 +847,28 @@ export default function App() {
                 }
                 return latest;
               });
-            }, 800);
+            }, 250);
           }
 
           return nextPlayers;
         });
       }, delay);
-      delay += 500;
+      delay += 250;
     });
   };
+
+  // Automatically evaluate voting tally as soon as ALL players have cast their votes
+  useEffect(() => {
+    if (gamePhase !== 'voting') return;
+    if (players.length > 0 && players.every((p) => Boolean(p.votedForId))) {
+      if (gameMode !== 'room' || isHost) {
+        const timer = setTimeout(() => {
+          evaluateVotingTally(players);
+        }, 250);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [gamePhase, players, gameMode, isHost]);
 
   // Evaluate votes and determine if Fox was caught
   const evaluateVotingTally = (votedPlayers: Player[]) => {
@@ -884,12 +908,38 @@ export default function App() {
 
     if (foxWasCaught) {
       sound.caught();
-      // Fox is caught! They get ONE chance to guess the secret word
+      const targetFox = caughtFox || actualFox;
+      setCaughtChameleonId(targetFox.id);
       setGamePhase('fox_guess');
-      setIsFoxGuessModalOpen(true);
 
-      // If Fox is an AI bot, let AI bot guess automatically after brief suspense
-      if (!caughtFox.isHuman) {
+      if (gameMode === 'pass_and_play') {
+        // Specifically switch pass-and-play turn to the caught Chameleon
+        const chamIdx = votedPlayers.findIndex((p) => p.id === targetFox.id);
+        if (chamIdx !== -1) {
+          setPassAndPlayIndex(chamIdx);
+          setIsPassAndPlayModalOpen(true);
+        }
+      }
+
+      if (gameMode === 'room' && roomId) {
+        socketClient.syncState(roomId, {
+          gamePhase: 'fox_guess',
+          players: votedPlayers,
+          foxPlayerId: targetFox.id,
+        });
+        broadcastState('fox_guess', votedPlayers);
+      }
+
+      // CRITICAL: Only open the interactive guess modal for the ACTUAL caught chameleon if human!
+      // Regular innocent players are NEVER given the task of guessing the word!
+      if (targetFox.id === myPlayerId && targetFox.isHuman) {
+        setIsFoxGuessModalOpen(true);
+      } else {
+        setIsFoxGuessModalOpen(false);
+      }
+
+      // If Fox is an AI bot, let AI bot guess automatically after brief snappy deliberation
+      if (!targetFox.isHuman) {
         setTimeout(() => {
           const allInnocentClues = votedPlayers
             .filter((p) => p.role === 'innocent')
@@ -899,13 +949,14 @@ export default function App() {
           setSelectedGuessWord(aiGuess);
 
           setTimeout(() => {
-            resolveRound(true, aiGuess, votedPlayers, tally, accusedPlayer, caughtFox);
-          }, 1200);
-        }, 1500);
+            resolveRound(true, aiGuess, votedPlayers, tally, accusedPlayer, targetFox);
+          }, 350);
+        }, 500);
       }
     } else {
       // Fox escaped undetected! Innocents voted for someone else or tied
       sound.victory();
+      setCaughtChameleonId(null);
       resolveRound(false, undefined, votedPlayers, tally, accusedPlayer, actualFox);
     }
   };
@@ -916,7 +967,10 @@ export default function App() {
     sound.click();
     setIsFoxGuessModalOpen(false);
 
-    const actualFox = players.find((p) => p.role === 'fox') || players[0];
+    const actualFox =
+      players.find((p) => p.id === (caughtChameleonId || foxPlayerId)) ||
+      players.find((p) => p.role === 'fox') ||
+      players[0];
     const accusedPlayer = actualFox; // Fox was accused
     const tally: Record<string, number> = {};
     players.forEach((p) => {
@@ -1157,8 +1211,26 @@ export default function App() {
     setIsFoxGuessModalOpen(false);
   };
 
-  const actualFoxPlayer = players.find((p) => p.role === 'fox') || null;
-  const isCurrentPlayerTheCaughtFox = activePlayer.role === 'fox';
+  // Kick player handler for host
+  const handleKickPlayer = async (targetPlayerId: string) => {
+    sound.click();
+    const updated = players.filter((p) => p.id !== targetPlayerId);
+    setPlayers(updated);
+
+    if (gameMode === 'room' && roomId) {
+      await socketClient.kickPlayer(roomId, targetPlayerId);
+      socketClient.syncState(roomId, { players: updated });
+      broadcastState(gamePhase, updated);
+    }
+  };
+
+  const actualFoxPlayer =
+    players.find((p) => p.id === (caughtChameleonId || foxPlayerId)) ||
+    players.find((p) => p.role === 'fox') ||
+    null;
+  const isCurrentPlayerTheCaughtFox =
+    activePlayer.role === 'fox' &&
+    (caughtChameleonId ? activePlayer.id === caughtChameleonId : activePlayer.id === foxPlayerId);
 
   return (
     <div className="min-h-screen bg-dark-pattern flex flex-col selection:bg-emerald-500 selection:text-slate-950 pb-8 text-slate-100">
@@ -1176,6 +1248,9 @@ export default function App() {
         peerCount={peerCount}
         roomPassword={settings.roomPassword}
         players={players}
+        isHost={isHost}
+        myPlayerId={myPlayerId}
+        onKickPlayer={handleKickPlayer}
       />
 
       {/* Main Container */}
@@ -1255,7 +1330,7 @@ export default function App() {
                     impostorPeekPlayerId={impostorPeekPlayerId}
                     gamePhase={gamePhase}
                     anonymousVoting={settings.anonymousVoting}
-                    canVoteNow={gamePhase === 'voting' && !activePlayer.votedForId}
+                    canVoteNow={gamePhase === 'voting' && !players.every((p) => Boolean(p.votedForId))}
                     selectedVoteTargetId={selectedVoteTargetId}
                     onSelectVoteTarget={(targetId) => setSelectedVoteTargetId(targetId)}
                   />
@@ -1320,9 +1395,9 @@ export default function App() {
         onClose={() => setIsRulesOpen(false)}
       />
 
-      {/* FOX GUESS MODAL (For dramatic Fox escape turn with smooth fade & slide) */}
-      <FoxGuessModal
-        isOpen={isFoxGuessModalOpen}
+      {/* CHAMELEON GUESS MODAL (Exclusively shown to the caught Chameleon for their escape guess) */}
+      <ChameleonGuessModal
+        isOpen={isFoxGuessModalOpen && isCurrentPlayerTheCaughtFox}
         category={category}
         foxPlayerName={actualFoxPlayer?.name || 'The Chameleon'}
         isHumanFox={isCurrentPlayerTheCaughtFox}
@@ -1350,6 +1425,18 @@ export default function App() {
         onConfirmReady={() => setIsPassAndPlayModalOpen(false)}
         gamePhase={gamePhase}
       />
+
+      {/* CREATOR FOOTER REFERENCE */}
+      <footer id="app-creator-footer" className="w-full max-w-7xl mx-auto px-4 py-3.5 text-center border-t border-slate-800/80 mt-auto">
+        <p className="text-xs text-slate-400 font-medium tracking-wide flex items-center justify-center gap-1.5 flex-wrap">
+          <span>Created by</span>
+          <span className="font-bold text-amber-300 font-display uppercase tracking-wider bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/80">
+            Ayaan Khan
+          </span>
+          <span className="text-slate-500">•</span>
+          <span className="text-slate-400">The Chameleon Social Deduction Game</span>
+        </p>
+      </footer>
     </div>
   );
 }

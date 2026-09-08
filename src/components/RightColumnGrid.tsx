@@ -66,7 +66,7 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
           <div className="rounded-lg border-2 border-rose-600 bg-rose-950/80 text-white p-3 shadow-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-2xl animate-bounce">🦊</span>
+                <span className="text-2xl animate-bounce">🦎</span>
                 <div>
                   <h3 className="font-display font-black text-sm sm:text-base uppercase tracking-tight text-yellow-300">
                     You are the CHAMELEON! Blend in.

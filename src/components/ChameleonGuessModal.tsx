@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Crosshair, Sparkles, AlertTriangle, Lightbulb } from 'lucide-react';
 import { Category, Coordinate, Player } from '../types';
 
-interface FoxGuessModalProps {
+interface ChameleonGuessModalProps {
   isOpen: boolean;
   category: Category;
   foxPlayerName: string;
@@ -14,7 +14,7 @@ interface FoxGuessModalProps {
   onSubmitGuess: () => void;
 }
 
-export const FoxGuessModal: React.FC<FoxGuessModalProps> = ({
+export const ChameleonGuessModal: React.FC<ChameleonGuessModalProps> = ({
   isOpen,
   category,
   foxPlayerName,

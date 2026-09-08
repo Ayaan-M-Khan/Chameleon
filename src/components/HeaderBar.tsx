@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Volume2, VolumeX, HelpCircle, Settings, LogOut, Users, Bot, Share2, Check, Copy, X } from 'lucide-react';
+import { Volume2, VolumeX, HelpCircle, Settings, LogOut, Users, Bot, Share2, Check, Copy, X, UserMinus } from 'lucide-react';
 import { GameMode, GamePhase, Player } from '../types';
 import { buildRoomInviteUrl } from '../utils/inviteUrl';
 
@@ -16,6 +16,9 @@ interface HeaderBarProps {
   peerCount: number;
   roomPassword?: string;
   players?: Player[];
+  isHost?: boolean;
+  myPlayerId?: string;
+  onKickPlayer?: (playerId: string) => void;
 }
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -31,6 +34,9 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   peerCount,
   roomPassword,
   players = [],
+  isHost = false,
+  myPlayerId,
+  onKickPlayer,
 }) => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -282,10 +288,25 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                           </div>
                         </div>
 
-                        <div className="text-right shrink-0">
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="text-xs font-mono font-bold text-emerald-400">
                             {player.score} pts
                           </span>
+                          {isHost && player.id !== myPlayerId && onKickPlayer && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Are you sure you want to kick ${player.name} from the party?`)) {
+                                  onKickPlayer(player.id);
+                                }
+                              }}
+                              className="p-1 px-1.5 rounded-lg text-rose-400 hover:text-rose-200 hover:bg-rose-950/70 border border-rose-800/40 hover:border-rose-600 transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"
+                              title={`Kick ${player.name} from party`}
+                            >
+                              <UserMinus className="w-3 h-3" />
+                              <span>Kick</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}

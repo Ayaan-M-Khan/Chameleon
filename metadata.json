@@ -2,5 +2,7 @@
   "name": "Chameleon",
   "description": "The Chameleon social deduction word game of blending in, deceptive clues, and secret codes with 4x4 matrix deduction.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
