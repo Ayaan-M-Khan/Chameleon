@@ -16,11 +16,16 @@ interface ServerPlayer {
   isHost: boolean;
   avatar: string;
   score: number;
+  gold?: number;
+  inventory?: any;
+  infiltratorBoostGold?: number;
+  chameleonBoostGold?: number;
   role: 'innocent' | 'fox';
   clue: string;
   hasSubmittedClue: boolean;
   votedForId: string | null;
   isReady: boolean;
+  isReadyToLeaveShop?: boolean;
 }
 
 interface ServerGameSettings {
@@ -84,7 +89,7 @@ interface ServerRoom {
   password?: string;
   hostId: string;
   gameMode: 'solo' | 'pass_and_play' | 'room';
-  gamePhase: 'home' | 'lobby' | 'clue_submission' | 'voting' | 'fox_guess' | 'round_resolution';
+  gamePhase: 'home' | 'lobby' | 'clue_submission' | 'voting' | 'fox_guess' | 'round_resolution' | 'shop';
   roundNumber: number;
   players: ServerPlayer[];
   selectedCategoryId: string;
@@ -220,10 +225,13 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
               isHost: true,
               isHuman: true,
               score: 0,
+              gold: 0,
+              inventory: {},
               clue: '',
               hasSubmittedClue: false,
               votedForId: null,
               isReady: false,
+              isReadyToLeaveShop: false,
             },
           ]
         : [],
@@ -262,11 +270,14 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
         isHuman: true,
         isHost: false,
         score: 0,
+        gold: 0,
+        inventory: {},
         role: 'innocent',
         clue: '',
         hasSubmittedClue: false,
         votedForId: null,
         isReady: false,
+        isReadyToLeaveShop: false,
       });
     }
   }

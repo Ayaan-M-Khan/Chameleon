@@ -731,12 +731,16 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                 {gameMode === 'room' && !isHost ? (
                   <div className="px-3.5 py-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg font-display text-xs text-amber-300 flex items-center gap-2 font-bold shadow-inner">
                     <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
-                    <span>Waiting for Host...</span>
+                    <span>
+                      {roundNumber && roundNumber % 3 === 0
+                        ? 'Waiting for Host to proceed to Shop 🛒...'
+                        : 'Waiting for Host...'}
+                    </span>
                   </div>
-                ) : roundNumber && roundNumber % 3 === 0 && settings.itemsEnabled !== false ? (
+                ) : roundNumber && roundNumber % 3 === 0 ? (
                   <button
                     onClick={onNextRound}
-                    className="retro-button px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md border-amber-300 active:scale-95 transition-transform"
+                    className="retro-button px-5 py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-slate-950 rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-950/40 border-2 border-amber-300 active:scale-95 transition-transform animate-pulse"
                   >
                     <span>Proceed to Shop 🛒</span>
                     <ArrowRight className="w-4 h-4" />

@@ -197,16 +197,41 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           )}
         </div>
 
-        {/* Center: Brand / Round Indicator */}
+        {/* Center: Brand / Round Indicator & Shop Countdown */}
         {gamePhase !== 'home' && (
-          <div className="hidden md:flex items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-emerald-500 text-slate-950 font-black px-2.5 py-0.5 rounded text-xs tracking-wider uppercase border border-slate-900 shadow-xs">
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-1.5 bg-emerald-500 text-slate-950 font-black px-2.5 py-0.5 rounded text-xs tracking-wider uppercase border border-slate-900 shadow-xs">
               🕵️ INFILTRATOR
             </div>
             {isInGame && (
-              <span className="text-xs font-bold text-slate-200 bg-slate-800 px-2 py-0.5 rounded border border-slate-700 font-mono">
-                ROUND {roundNumber}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-200 bg-slate-800 px-2 py-0.5 rounded border border-slate-700 font-mono">
+                  ROUND {roundNumber}
+                </span>
+
+                {/* Shop Round Countdown Badge */}
+                {roundNumber % 3 === 0 ? (
+                  <span
+                    className="text-[11px] font-mono font-black text-amber-300 bg-amber-950/90 px-2.5 py-0.5 rounded-full border border-amber-400/80 shadow-xs flex items-center gap-1 animate-pulse"
+                    title="Mystic Shop opens immediately following this round!"
+                  >
+                    <span>🛒</span>
+                    <span className="hidden sm:inline">Shop After This Round!</span>
+                    <span className="sm:hidden">Shop Round!</span>
+                  </span>
+                ) : (
+                  <span
+                    className="text-[11px] font-mono font-medium text-slate-300 bg-slate-800/90 px-2 py-0.5 rounded-full border border-slate-700/80 flex items-center gap-1 shadow-xs"
+                    title={`Mystic Shop opens in ${3 - (roundNumber % 3)} round${3 - (roundNumber % 3) > 1 ? 's' : ''} (after Round ${roundNumber + (3 - (roundNumber % 3))})`}
+                  >
+                    <span className="text-amber-400">🛒</span>
+                    <span>
+                      Shop in {3 - (roundNumber % 3)}
+                      <span className="hidden xs:inline"> rd{3 - (roundNumber % 3) > 1 ? 's' : ''}</span>
+                    </span>
+                  </span>
+                )}
+              </div>
             )}
           </div>
         )}

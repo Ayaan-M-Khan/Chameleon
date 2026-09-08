@@ -75,7 +75,7 @@ const INITIAL_PLAYERS: Player[] = [
     isHost: true,
     avatar: '🦎',
     score: 0,
-    gold: 250,
+    gold: 0,
     inventory: {},
     role: 'innocent',
     clue: '',
@@ -90,7 +90,7 @@ const INITIAL_PLAYERS: Player[] = [
     isHost: false,
     avatar: '🕵️‍♂️',
     score: 0,
-    gold: 250,
+    gold: 0,
     inventory: {},
     role: 'innocent',
     clue: '',
@@ -105,7 +105,7 @@ const INITIAL_PLAYERS: Player[] = [
     isHost: false,
     avatar: '🦉',
     score: 0,
-    gold: 250,
+    gold: 0,
     inventory: {},
     role: 'innocent',
     clue: '',
@@ -120,7 +120,7 @@ const INITIAL_PLAYERS: Player[] = [
     isHost: false,
     avatar: '🐱',
     score: 0,
-    gold: 250,
+    gold: 0,
     inventory: {},
     role: 'innocent',
     clue: '',
@@ -399,6 +399,7 @@ export default function App() {
         if (gamePhaseRef.current === 'home' || !roomIdRef.current) return;
         if (data.phase) setGamePhase(data.phase);
         if (data.players) setPlayers(data.players);
+        if (data.roundNumber !== undefined) setRoundNumber(data.roundNumber);
         if (data.category) {
           setCategory(data.category);
           categoryRef.current = data.category;
@@ -421,7 +422,7 @@ export default function App() {
   }, [roomId, gameMode]);
 
   // Broadcast helper
-  const broadcastState = useCallback((phase?: GamePhase, updatedPlayers?: Player[], res?: RoundResolution | null) => {
+  const broadcastState = useCallback((phase?: GamePhase, updatedPlayers?: Player[], res?: RoundResolution | null, currentRound?: number) => {
     if (gameMode !== 'room' || !broadcastChannelRef.current) return;
     broadcastChannelRef.current.postMessage({
       type: 'STATE_SYNC',
@@ -431,8 +432,9 @@ export default function App() {
       secretCoordinate,
       foxPlayerId,
       roundResolution: res !== undefined ? res : roundResolution,
+      roundNumber: currentRound !== undefined ? currentRound : roundNumber,
     });
-  }, [gameMode, gamePhase, players, category, secretCoordinate, foxPlayerId, roundResolution]);
+  }, [gameMode, gamePhase, players, category, secretCoordinate, foxPlayerId, roundResolution, roundNumber]);
 
   // Turn timer effect
   useEffect(() => {
@@ -463,7 +465,7 @@ export default function App() {
   }, [gamePhase, settings.turnTimer, settings.turnTimerSeconds, soundEnabled]);
 
   // Setup New Round
-  const startNewRound = useCallback((keepScores = true) => {
+  const startNewRound = useCallback((keepScores = true, targetRoundNumber?: number) => {
     // Only the host may start the game or begin the next round in multiplayer rooms
     if (gameMode === 'room' && !isHost) {
       console.warn('Only the room host can start the round');
@@ -471,6 +473,9 @@ export default function App() {
     }
 
     sound.click();
+
+    const nextRound = targetRoundNumber !== undefined ? targetRoundNumber : (keepScores ? roundNumber : 1);
+    setRoundNumber(nextRound);
 
     // 1. Determine Category
     let chosenCat: Category;
@@ -578,8 +583,10 @@ export default function App() {
         hasSubmittedClue: false,
         votedForId: null,
         isReady: false,
+        isReadyToLeaveShop: false,
         score: keepScores ? p.score : 0,
-        gold: Math.max(0, (p.gold ?? 0) - boostSpent),
+        gold: keepScores ? Math.max(0, (p.gold ?? 0) - boostSpent) : 0,
+        inventory: keepScores ? (p.inventory || {}) : {},
         infiltratorBoostGold: 0,
         chameleonBoostGold: 0,
       };
@@ -625,6 +632,7 @@ export default function App() {
     if (gameMode === 'room' && roomId) {
       socketClient.syncState(roomId, {
         gamePhase: 'clue_submission',
+        roundNumber: nextRound,
         players: updatedPlayers,
         category: chosenCat,
         secretCoordinate: coord,
@@ -633,7 +641,7 @@ export default function App() {
       });
     }
 
-    broadcastState('clue_submission', updatedPlayers, null);
+    broadcastState('clue_submission', updatedPlayers, null, nextRound);
 
     // Stagger AI bots with natural timing so human has comfortable time to think & edit clue
     if (gameMode !== 'pass_and_play') {
@@ -642,7 +650,7 @@ export default function App() {
         processBotClues(updatedPlayers, 3500, coord, chosenCat);
       }
     }
-  }, [selectedCategoryId, players, gameMode, settings.infiltratorCount, settings.chameleonCount, settings.categoryDeckMode, settings.categoryPool, roomId, broadcastState, isHost]);
+  }, [selectedCategoryId, players, gameMode, settings.infiltratorCount, settings.chameleonCount, settings.categoryDeckMode, settings.categoryPool, roomId, broadcastState, isHost, roundNumber]);
 
   // Handle Player Management in Lobby
   const handleAddBot = () => {
@@ -660,7 +668,7 @@ export default function App() {
       isHost: false,
       avatar: botAvatar,
       score: 0,
-      gold: 250,
+      gold: 0,
       inventory: {},
       role: 'innocent',
       clue: '',
@@ -1406,12 +1414,13 @@ export default function App() {
     if (gameMode === 'room' && roomId) {
       socketClient.syncState(roomId, {
         gamePhase: 'round_resolution',
+        roundNumber,
         players: updatedPlayers,
         roundResolution: resolution,
       });
     }
 
-    broadcastState('round_resolution', updatedPlayers, resolution);
+    broadcastState('round_resolution', updatedPlayers, resolution, roundNumber);
   };
 
   // Robust player removal: cleans up clues, votes, active effects, and immediately advances game phase if needed
@@ -1523,39 +1532,63 @@ export default function App() {
 
     setIsResolutionModalOpen(false);
     if (roundNumber % 3 === 0 && settings.itemsEnabled !== false) {
+      // Reset all players' readiness to leave the shop
+      const resetPlayers = players.map((p) => ({
+        ...p,
+        isReadyToLeaveShop: false,
+      }));
+      setPlayers(resetPlayers);
       setGamePhase('shop');
       gamePhaseRef.current = 'shop';
       if (gameMode === 'room' && roomId) {
         socketClient.syncState(roomId, {
           gamePhase: 'shop',
-          players,
+          players: resetPlayers,
+          roundNumber,
         });
       }
-      broadcastState('shop', players);
+      broadcastState('shop', resetPlayers, null, roundNumber);
     } else {
-      setRoundNumber((r) => r + 1);
-      startNewRound(true);
+      const nextRound = roundNumber + 1;
+      setRoundNumber(nextRound);
+      startNewRound(true, nextRound);
     }
   };
 
-  // Buy Potion in Shop
-  const handleBuyPotion = (potionId: string, cost: number) => {
-    setPlayers((prev) =>
-      prev.map((p) => {
-        if (p.id === activePlayer.id) {
-          const curGold = p.gold ?? 0;
-          if (curGold < cost) return p;
-          const currentInv = { ...(p.inventory || {}) };
-          currentInv[potionId] = (currentInv[potionId] || 0) + 1;
-          return {
-            ...p,
-            gold: curGold - cost,
-            inventory: currentInv,
-          };
-        }
-        return p;
-      })
+  // Buy Potion in Shop (supports both active player and pass-and-play selected shopper)
+  const handleBuyPotion = (potionId: string, cost: number, targetPlayerId?: string) => {
+    const shopperId = targetPlayerId || activePlayer.id;
+    const updated = players.map((p) => {
+      if (p.id === shopperId) {
+        const curGold = p.gold ?? 0;
+        if (curGold < cost) return p;
+        const currentInv = { ...(p.inventory || {}) };
+        currentInv[potionId] = (currentInv[potionId] || 0) + 1;
+        return {
+          ...p,
+          gold: curGold - cost,
+          inventory: currentInv,
+        };
+      }
+      return p;
+    });
+    setPlayers(updated);
+    if (gameMode === 'room' && roomId) {
+      socketClient.syncState(roomId, { players: updated });
+    }
+    broadcastState(gamePhase, updated);
+  };
+
+  // Toggle Confirm Leave Shop for a player
+  const handleToggleConfirmLeave = (targetPlayerId: string, isReady: boolean) => {
+    const updated = players.map((p) =>
+      p.id === targetPlayerId ? { ...p, isReadyToLeaveShop: isReady } : p
     );
+    setPlayers(updated);
+    if (gameMode === 'room' && roomId) {
+      socketClient.syncState(roomId, { players: updated });
+    }
+    broadcastState(gamePhase, updated);
   };
 
   // Exit Shop and transition to next round (roundNumber + 1)
@@ -1564,9 +1597,10 @@ export default function App() {
       console.warn('Only the room host can exit shop and start next round');
       return;
     }
-    sound.click();
-    setRoundNumber((r) => r + 1);
-    startNewRound(true);
+    sound.shopDepart();
+    const nextRound = roundNumber + 1;
+    setRoundNumber(nextRound);
+    startNewRound(true, nextRound);
   };
 
   // Use Potion from Inventory Panel
@@ -1934,7 +1968,7 @@ export default function App() {
       isHuman: true,
       isHost: true,
       score: 0,
-      gold: 250,
+      gold: 0,
       inventory: {},
       role: 'innocent',
       clue: '',
@@ -1980,7 +2014,7 @@ export default function App() {
       isHuman: true,
       isHost: false,
       score: 0,
-      gold: 250,
+      gold: 0,
       inventory: {},
       role: 'innocent',
       clue: '',
@@ -1995,6 +2029,7 @@ export default function App() {
       setPlayers(result.room.players);
       if (result.room.settings) setSettings((prev) => ({ ...prev, ...result.room.settings }));
       if (result.room.gamePhase) setGamePhase(result.room.gamePhase);
+      if (result.room.roundNumber !== undefined) setRoundNumber(result.room.roundNumber);
       if (result.room.selectedCategoryId) setSelectedCategoryId(result.room.selectedCategoryId);
       if (result.room.category) setCategory(result.room.category);
     } else {
@@ -2323,15 +2358,18 @@ export default function App() {
         gameMode={gameMode}
       />
 
-      {/* THE MYSTIC SHOP MODAL (Triggers every 3 rounds) */}
+      {/* THE MYSTIC SHOP MODAL (Triggers every 3 rounds with all-player confirm-to-leave) */}
       <ShopModal
         isOpen={gamePhase === 'shop'}
         player={activePlayer}
+        players={players}
         onBuyPotion={handleBuyPotion}
+        onToggleConfirmLeave={handleToggleConfirmLeave}
         onNextRound={handleExitShop}
         roundNumber={roundNumber}
         isHost={isHost}
         gameMode={gameMode}
+        myPlayerId={myPlayerId}
       />
 
       {/* INFILTRATOR ORACLE SERUM PROMPT MODAL */}

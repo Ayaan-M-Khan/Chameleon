@@ -30,6 +30,7 @@ export interface Player {
   hasSubmittedClue: boolean;
   votedForId: string | null;
   isReady: boolean;
+  isReadyToLeaveShop?: boolean;
 }
 
 export interface DiscussionMessage {

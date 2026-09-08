@@ -379,20 +379,44 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
               </div>
             </div>
 
-            {/* Gold Reward & Shop Alert */}
-            <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/40 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-base select-none">🪙</span>
-                <span className="font-mono text-amber-200">
-                  Round Reward: <strong className="text-amber-400 font-bold">+100 Gold Coins</strong> for all players!
-                </span>
-              </div>
-              {roundNumber && roundNumber % 3 === 0 && (
-                <span className="font-mono text-[11px] font-bold text-yellow-300 bg-amber-900/80 px-2 py-0.5 rounded border border-amber-500/60 animate-pulse">
-                  🛒 Shop Open!
-                </span>
-              )}
-            </div>
+            {/* Gold Reward & Shop Alert with Live Countdown */}
+            {(() => {
+              const isShopRound = Boolean(roundNumber && roundNumber % 3 === 0);
+              const roundsUntilShop = roundNumber ? 3 - (roundNumber % 3 === 0 ? 3 : roundNumber % 3) : 3;
+
+              return (
+                <div
+                  className={`p-3 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs transition-all ${
+                    isShopRound
+                      ? 'bg-gradient-to-r from-amber-950/80 via-slate-900 to-amber-950/80 border-amber-400/90 text-amber-100 shadow-md shadow-amber-950/40 ring-1 ring-amber-400/40'
+                      : 'bg-slate-900/80 border-slate-700/80 text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base select-none">🪙</span>
+                    <span className="font-mono text-xs">
+                      Round Reward: <strong className="text-amber-400 font-bold">+100 Gold Coins</strong> awarded to all players!
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isShopRound ? (
+                      <span className="font-mono text-xs font-black text-slate-950 bg-amber-400 px-3 py-1 rounded-lg border border-amber-300 animate-pulse flex items-center gap-1.5 shadow-sm">
+                        <span>🛒</span>
+                        <span>Mystic Shop Open Next!</span>
+                      </span>
+                    ) : (
+                      <span className="font-mono text-[11px] font-bold text-amber-300 bg-amber-950/60 px-2.5 py-1 rounded-lg border border-amber-800/60 flex items-center gap-1.5">
+                        <span>🛒</span>
+                        <span>
+                          Shop in {roundsUntilShop} round{roundsUntilShop > 1 ? 's' : ''} (after Round {roundNumber + roundsUntilShop})
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Action Buttons */}
             <div className="pt-2 flex flex-col sm:flex-row items-center gap-2.5">
@@ -409,14 +433,19 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
               {gameMode === 'room' && !isHost ? (
                 <div className="w-full flex-1 py-2.5 px-4 rounded-xl bg-slate-900/90 border border-slate-700 text-center flex items-center justify-center gap-2.5 text-slate-300 font-display text-xs sm:text-sm font-bold shadow-inner">
                   <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
-                  <span className="text-amber-300">Waiting for Host to start the next round...</span>
+                  <span className="text-amber-300">
+                    {roundNumber && roundNumber % 3 === 0
+                      ? 'Waiting for Host to proceed to Shop 🛒...'
+                      : 'Waiting for Host to start the next round...'}
+                  </span>
                 </div>
               ) : roundNumber && roundNumber % 3 === 0 ? (
                 <button
                   onClick={onNextRound}
-                  className="w-full flex-1 retro-button px-6 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-transform border-amber-300 active:scale-95"
+                  className="w-full flex-1 retro-button px-6 py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 cursor-pointer transition-transform border-2 border-amber-300 active:scale-95 animate-pulse"
                 >
-                  <span>Proceed to Shop 🛒</span>
+                  <span className="text-base">🛒</span>
+                  <span>Proceed to Shop</span>
                   <ArrowRight className="w-4 h-4 text-slate-950" />
                 </button>
               ) : (
