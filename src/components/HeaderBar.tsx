@@ -19,6 +19,9 @@ interface HeaderBarProps {
   isHost?: boolean;
   myPlayerId?: string;
   onKickPlayer?: (playerId: string) => void;
+  onOpenOddsBooster?: () => void;
+  myChameleonOdds?: number;
+  myChameleonBoostGold?: number;
 }
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -37,6 +40,9 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   isHost = false,
   myPlayerId,
   onKickPlayer,
+  onOpenOddsBooster,
+  myChameleonOdds,
+  myChameleonBoostGold,
 }) => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -344,6 +350,26 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               {gameMode === 'solo' ? <Bot className="w-3.5 h-3.5 text-emerald-400" /> : <Users className="w-3.5 h-3.5 text-cyan-400" />}
               <span className="capitalize">{gameMode.replace('_', ' ')}</span>
             </div>
+          )}
+
+          {/* Chameleon Odds Booster Quick Trigger */}
+          {isInRoom && onOpenOddsBooster && (
+            <button
+              onClick={onOpenOddsBooster}
+              className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-amber-950/80 hover:bg-amber-900/90 text-amber-300 border border-amber-500/60 shadow-xs cursor-pointer transition-all hover:scale-[1.02]"
+              title="Boost your chances of drawing the Chameleon role in upcoming rounds with gold!"
+            >
+              <span className="text-sm select-none">🦎</span>
+              <span className="hidden sm:inline">Odds:</span>
+              <span className="text-yellow-300">
+                {myChameleonOdds !== undefined ? `${myChameleonOdds.toFixed(1)}%` : 'Odds'}
+              </span>
+              {myChameleonBoostGold && myChameleonBoostGold > 0 ? (
+                <span className="text-[10px] bg-amber-400 text-slate-950 px-1 rounded font-black">
+                  +{Math.floor(myChameleonBoostGold / 50)} 🎟️
+                </span>
+              ) : null}
+            </button>
           )}
 
           {/* Sound Toggle */}

@@ -28,9 +28,15 @@ import { RulesModal } from './components/RulesModal';
 import { ChameleonGuessModal } from './components/ChameleonGuessModal';
 import { RoundResolutionModal } from './components/RoundResolutionModal';
 import { PassAndPlayModal } from './components/PassAndPlayModal';
+import { ShopModal } from './components/ShopModal';
+import { OracleSerumModal } from './components/OracleSerumModal';
+import { ClueForgeryModal } from './components/ClueForgeryModal';
+import { SilencePotionModal } from './components/SilencePotionModal';
+import { ChameleonBoosterModal } from './components/ChameleonBoosterModal';
 import { HomeView } from './components/HomeView';
 import { parseInviteUrl } from './utils/inviteUrl';
 import { socketClient } from './utils/socketClient';
+import { DiscussionMessage } from './types';
 
 // Helper to generate a friendly Room ID
 function generateRoomId(): string {
@@ -66,6 +72,8 @@ const INITIAL_PLAYERS: Player[] = [
     isHost: true,
     avatar: '🦎',
     score: 0,
+    gold: 250,
+    inventory: {},
     role: 'innocent',
     clue: '',
     hasSubmittedClue: false,
@@ -79,6 +87,8 @@ const INITIAL_PLAYERS: Player[] = [
     isHost: false,
     avatar: '🕵️‍♂️',
     score: 0,
+    gold: 250,
+    inventory: {},
     role: 'innocent',
     clue: '',
     hasSubmittedClue: false,
@@ -92,6 +102,8 @@ const INITIAL_PLAYERS: Player[] = [
     isHost: false,
     avatar: '🦉',
     score: 0,
+    gold: 250,
+    inventory: {},
     role: 'innocent',
     clue: '',
     hasSubmittedClue: false,
@@ -105,6 +117,8 @@ const INITIAL_PLAYERS: Player[] = [
     isHost: false,
     avatar: '🐱',
     score: 0,
+    gold: 250,
+    inventory: {},
     role: 'innocent',
     clue: '',
     hasSubmittedClue: false,
@@ -209,6 +223,38 @@ export default function App() {
   const [isFoxGuessModalOpen, setIsFoxGuessModalOpen] = useState(false);
   const [isResolutionModalOpen, setIsResolutionModalOpen] = useState(false);
   const [caughtChameleonId, setCaughtChameleonId] = useState<string | null>(null);
+
+  // Shop & Potion States
+  const [hasUsedPotionThisTurn, setHasUsedPotionThisTurn] = useState(false);
+  const [hasUsedOracleThisRound, setHasUsedOracleThisRound] = useState(false);
+  const [oracleHighlight, setOracleHighlight] = useState<{ type: 'row' | 'col'; value: number | string } | null>(null);
+  const [isOracleModalOpen, setIsOracleModalOpen] = useState(false);
+  const [activeVoteShields, setActiveVoteShields] = useState<string[]>([]);
+  const [clueLensPeekPlayerId, setClueLensPeekPlayerId] = useState<string | null>(null);
+  const [isScrambling, setIsScrambling] = useState(false);
+  const [recentlyUsedPotionPlayerId, setRecentlyUsedPotionPlayerId] = useState<string | null>(null);
+  const [recentlyUsedPotionId, setRecentlyUsedPotionId] = useState<string | null>(null);
+  const [activePotionToast, setActivePotionToast] = useState<{
+    message: string;
+    icon: string;
+    style: 'sky' | 'cyan' | 'purple' | 'amber';
+    isChameleonOnly?: boolean;
+  } | null>(null);
+  const [isClueForgeryModalOpen, setIsClueForgeryModalOpen] = useState(false);
+  const [pendingClueForged, setPendingClueForged] = useState<{ targetPlayerId: string; newClue: string } | null>(null);
+  const pendingClueForgedRef = useRef<{ targetPlayerId: string; newClue: string } | null>(null);
+  const [forgedTargetPlayerId, setForgedTargetPlayerId] = useState<string | null>(null);
+  const [oracleShattered, setOracleShattered] = useState(false);
+
+  // Silence potion states
+  const [silencedPlayerIds, setSilencedPlayerIds] = useState<string[]>([]);
+  const [isSilenceModalOpen, setIsSilenceModalOpen] = useState(false);
+
+  // Chameleon odds booster state
+  const [isChameleonBoosterModalOpen, setIsChameleonBoosterModalOpen] = useState(false);
+
+  // Round discussion and accusations messages
+  const [discussionMessages, setDiscussionMessages] = useState<DiscussionMessage[]>([]);
 
   // Pass and play states
   const [passAndPlayIndex, setPassAndPlayIndex] = useState(0);
@@ -455,24 +501,76 @@ export default function App() {
     setSecretCoordinate(coord);
     secretCoordinateRef.current = coord;
 
-    // 3. Secretly assign FOX / Chameleon based on settings.chameleonCount
+    // 3. Secretly assign FOX / Chameleon based on settings.chameleonCount and gold-based lottery weights
     const count = Math.min(settings.chameleonCount || 1, Math.max(1, Math.floor(players.length / 2)));
-    const shuffledIndices = Array.from({ length: players.length }, (_, i) => i)
-      .sort(() => Math.random() - 0.5);
-    const foxIndices = new Set(shuffledIndices.slice(0, count));
-    const assignedFoxId = players[shuffledIndices[0]]?.id || players[0].id;
+
+    // Calculate tickets for each player: 1 base ticket + 1 ticket per 50 gold invested
+    const playerTickets = players.map((p) => {
+      const boostGold = p.chameleonBoostGold || 0;
+      return 1 + Math.floor(boostGold / 50);
+    });
+
+    const chosenFoxIndices = new Set<number>();
+    const pool = players.map((_, i) => i);
+
+    for (let c = 0; c < count; c++) {
+      const remainingPool = pool.filter((idx) => !chosenFoxIndices.has(idx));
+      if (remainingPool.length === 0) break;
+      const totalWeight = remainingPool.reduce((sum, idx) => sum + playerTickets[idx], 0);
+      let rand = Math.random() * totalWeight;
+      let pickedIdx = remainingPool[0];
+      for (const idx of remainingPool) {
+        rand -= playerTickets[idx];
+        if (rand <= 0) {
+          pickedIdx = idx;
+          break;
+        }
+      }
+      chosenFoxIndices.add(pickedIdx);
+    }
+
+    const assignedFoxId = players[[...chosenFoxIndices][0]]?.id || players[0].id;
     setFoxPlayerId(assignedFoxId);
 
-    // Reset players for new round
-    const updatedPlayers: Player[] = players.map((p, idx) => ({
-      ...p,
-      role: foxIndices.has(idx) ? 'fox' : 'innocent',
-      clue: '',
-      hasSubmittedClue: false,
-      votedForId: null,
-      isReady: false,
-      score: keepScores ? p.score : 0,
-    }));
+    // Toast feedback if the active player invested gold for boost
+    const activeBoost = activePlayer.chameleonBoostGold || 0;
+    const activeIsChosenFox = chosenFoxIndices.has(players.findIndex((p) => p.id === activePlayer.id));
+    if (activeBoost > 0) {
+      if (activeIsChosenFox) {
+        sound.powerup();
+        setActivePotionToast({
+          message: `🦎 Your gold bribe succeeded! You were chosen as the Chameleon!`,
+          icon: '🦎',
+          style: 'amber',
+          isChameleonOnly: true,
+        });
+        setTimeout(() => setActivePotionToast(null), 4500);
+      } else {
+        setActivePotionToast({
+          message: `🪙 Your Chameleon boost (${Math.floor(activeBoost / 50)} extra tickets) was used this round!`,
+          icon: '🪙',
+          style: 'amber',
+          isChameleonOnly: true,
+        });
+        setTimeout(() => setActivePotionToast(null), 3500);
+      }
+    }
+
+    // Reset players for new round & deduct consumed boost gold
+    const updatedPlayers: Player[] = players.map((p, idx) => {
+      const boostSpent = p.chameleonBoostGold || 0;
+      return {
+        ...p,
+        role: chosenFoxIndices.has(idx) ? 'fox' : 'innocent',
+        clue: '',
+        hasSubmittedClue: false,
+        votedForId: null,
+        isReady: false,
+        score: keepScores ? p.score : 0,
+        gold: Math.max(0, (p.gold ?? 0) - boostSpent),
+        chameleonBoostGold: 0,
+      };
+    });
 
     setPlayers(updatedPlayers);
     setClueInput('');
@@ -485,6 +583,23 @@ export default function App() {
     setCaughtChameleonId(null);
     setIsFoxGuessModalOpen(false);
     setIsResolutionModalOpen(false);
+    setHasUsedPotionThisTurn(false);
+    setHasUsedOracleThisRound(false);
+    setOracleHighlight(null);
+    setIsOracleModalOpen(false);
+    setActiveVoteShields([]);
+    setClueLensPeekPlayerId(null);
+    setIsScrambling(false);
+    setRecentlyUsedPotionPlayerId(null);
+    setRecentlyUsedPotionId(null);
+    setActivePotionToast(null);
+    setIsClueForgeryModalOpen(false);
+    setPendingClueForged(null);
+    pendingClueForgedRef.current = null;
+    setForgedTargetPlayerId(null);
+    setOracleShattered(false);
+    setSilencedPlayerIds([]);
+    setDiscussionMessages([]);
 
     if (gameMode === 'pass_and_play') {
       setPassAndPlayIndex(0);
@@ -532,6 +647,8 @@ export default function App() {
       isHost: false,
       avatar: botAvatar,
       score: 0,
+      gold: 250,
+      inventory: {},
       role: 'innocent',
       clue: '',
       hasSubmittedClue: false,
@@ -813,8 +930,20 @@ export default function App() {
         isReady: true,
       };
     });
+ 
+    // Silently execute Chameleon Forgery if one was planned!
+    const pending = pendingClueForgedRef.current;
+    let finalWithForgedClues = verifiedPlayers;
+    if (pending) {
+      finalWithForgedClues = verifiedPlayers.map((p) =>
+        p.id === pending.targetPlayerId ? { ...p, clue: pending.newClue } : p
+      );
+      setForgedTargetPlayerId(pending.targetPlayerId);
+      setPendingClueForged(null);
+      pendingClueForgedRef.current = null;
+    }
 
-    setPlayers(verifiedPlayers);
+    setPlayers(finalWithForgedClues);
     setGamePhase('voting');
     gamePhaseRef.current = 'voting';
     setSelectedVoteTargetId(null);
@@ -827,10 +956,10 @@ export default function App() {
     if (gameMode === 'room' && roomId) {
       socketClient.syncState(roomId, {
         gamePhase: 'voting',
-        players: verifiedPlayers,
+        players: finalWithForgedClues,
       });
     }
-    broadcastState('voting', verifiedPlayers);
+    broadcastState('voting', finalWithForgedClues);
   };
 
   // Human player submits vote
@@ -967,6 +1096,71 @@ export default function App() {
     }
   }, [gamePhase, players, gameMode, isHost]);
 
+  // Automated AI bot discussion remarks during voting / debate phase
+  useEffect(() => {
+    if (gamePhase !== 'voting') return;
+    const bots = players.filter((p) => !p.isHuman);
+    if (bots.length === 0) return;
+
+    const shuffledBots = [...bots].sort(() => Math.random() - 0.5).slice(0, Math.min(2, bots.length));
+    const timeouts: NodeJS.Timeout[] = [];
+
+    shuffledBots.forEach((bot, idx) => {
+      const isBotSilenced = silencedPlayerIds.includes(bot.id);
+      const delay = 900 + idx * 2400;
+
+      const t = setTimeout(() => {
+        setDiscussionMessages((prev) => {
+          if (prev.some((m) => m.playerId === bot.id)) return prev;
+
+          let msg = '';
+          if (isBotSilenced) {
+            msg = '... [muffled attempts to speak through the magical silence curse] 🤐';
+          } else {
+            const suspectCandidates = players.filter((p) => p.id !== bot.id && p.clue);
+            const suspect = suspectCandidates[Math.floor(Math.random() * suspectCandidates.length)];
+            const phrases = [
+              suspect
+                ? `I'm analyzing clues carefully... ${suspect.name}'s clue "${suspect.clue}" feels really suspicious! 🧐`
+                : "Look closely at the grid coordinates!",
+              "My clue connects directly to the category topic, I assure everyone! 🎯",
+              suspect
+                ? `Notice how ${suspect.name}'s clue is super broad? Anyone could guess that without knowing the secret word!`
+                : "The Chameleon is definitely hiding among us.",
+              "I'm voting based on grid alignment. Trust the clues! 🗺️",
+            ];
+            msg = phrases[Math.floor(Math.random() * phrases.length)];
+          }
+
+          return [
+            ...prev,
+            {
+              id: `msg-${Date.now()}-${bot.id}`,
+              playerId: bot.id,
+              playerName: bot.name,
+              playerAvatar: bot.avatar,
+              message: msg,
+              timestamp: Date.now(),
+              isSilencedAttempt: isBotSilenced,
+            },
+          ];
+        });
+      }, delay);
+
+      timeouts.push(t);
+    });
+
+    return () => timeouts.forEach((t) => clearTimeout(t));
+  }, [gamePhase, silencedPlayerIds, players]);
+
+  // Calculate Chameleon drawing odds for active player
+  const myChameleonOdds = React.useMemo(() => {
+    const list = players.map((p) => 1 + Math.floor((p.chameleonBoostGold || 0) / 50));
+    const total = list.reduce((a, b) => a + b, 0);
+    const myTickets = 1 + Math.floor((activePlayer.chameleonBoostGold || 0) / 50);
+    return total > 0 ? (myTickets / total) * 100 : 0;
+  }, [players, activePlayer]);
+
   // Evaluate votes and determine if Fox was caught
   const evaluateVotingTally = (votedPlayers: Player[]) => {
     // Strict requirement: MUST wait for everyone to put in their vote before showing results!
@@ -977,6 +1171,13 @@ export default function App() {
     votedPlayers.forEach((p) => {
       if (p.votedForId) {
         tally[p.votedForId] = (tally[p.votedForId] || 0) + 1;
+      }
+    });
+
+    // Deduct 1 vote against shielded players (Vote Shield effect)
+    activeVoteShields.forEach((shieldedId) => {
+      if (tally[shieldedId] !== undefined) {
+        tally[shieldedId] = Math.max(0, tally[shieldedId] - 1);
       }
     });
 
@@ -1147,10 +1348,14 @@ export default function App() {
       });
     }
 
-    // Update cumulative scores
+    // Update cumulative scores and award 100 Gold coins per round
     const updatedPlayers = currentPlayers.map((p) => {
       const earned = pointsAwarded[p.id]?.points || 0;
-      return { ...p, score: p.score + earned };
+      return {
+        ...p,
+        score: p.score + earned,
+        gold: (p.gold ?? 0) + 100,
+      };
     });
 
     const resolution: RoundResolution = {
@@ -1193,8 +1398,382 @@ export default function App() {
   // Next round trigger from resolution
   const handleNextRound = () => {
     setIsResolutionModalOpen(false);
+    if (roundNumber % 3 === 0) {
+      setGamePhase('shop');
+      gamePhaseRef.current = 'shop';
+      if (gameMode === 'room' && roomId) {
+        socketClient.syncState(roomId, {
+          gamePhase: 'shop',
+          players,
+        });
+      }
+      broadcastState('shop', players);
+    } else {
+      setRoundNumber((r) => r + 1);
+      startNewRound(true);
+    }
+  };
+
+  // Buy Potion in Shop
+  const handleBuyPotion = (potionId: string, cost: number) => {
+    setPlayers((prev) =>
+      prev.map((p) => {
+        if (p.id === activePlayer.id) {
+          const curGold = p.gold ?? 0;
+          if (curGold < cost) return p;
+          const currentInv = { ...(p.inventory || {}) };
+          currentInv[potionId] = (currentInv[potionId] || 0) + 1;
+          return {
+            ...p,
+            gold: curGold - cost,
+            inventory: currentInv,
+          };
+        }
+        return p;
+      })
+    );
+  };
+
+  // Exit Shop and transition to next round (roundNumber + 1)
+  const handleExitShop = () => {
+    sound.click();
     setRoundNumber((r) => r + 1);
     startNewRound(true);
+  };
+
+  // Use Potion from Inventory Panel
+  const handleUsePotion = (potionId: string) => {
+    if (hasUsedPotionThisTurn) return;
+
+    const currentInv = activePlayer.inventory || {};
+    const count = currentInv[potionId] || 0;
+    if (count <= 0) return;
+
+    // Restrict Chameleon Oracle Serum to max 1 per round
+    if (potionId === 'oracle_serum' && hasUsedOracleThisRound) {
+      return;
+    }
+
+    // If Chameleon is using Ink of Deceit, open target selector & clue editor popup first
+    if (potionId === 'ink_of_deceit') {
+      sound.potionDrink();
+      setIsClueForgeryModalOpen(true);
+      return;
+    }
+
+    // If Chameleon is using Silence Curse, open player selection modal
+    if (potionId === 'silence_curse') {
+      sound.potionDrink();
+      setIsSilenceModalOpen(true);
+      return;
+    }
+
+    // Deduct potion from player inventory
+    setPlayers((prev) =>
+      prev.map((p) => {
+        if (p.id === activePlayer.id) {
+          const nextInv = { ...(p.inventory || {}) };
+          if (nextInv[potionId] > 1) {
+            nextInv[potionId] -= 1;
+          } else {
+            delete nextInv[potionId];
+          }
+          return {
+            ...p,
+            inventory: nextInv,
+          };
+        }
+        return p;
+      })
+    );
+
+    // Enforce 1 use per turn
+    setHasUsedPotionThisTurn(true);
+
+    // Visual bubble/sparkle animation on active player row (filtered sneaky in UI)
+    setRecentlyUsedPotionPlayerId(activePlayer.id);
+    setRecentlyUsedPotionId(potionId);
+    setTimeout(() => {
+      setRecentlyUsedPotionPlayerId(null);
+      setRecentlyUsedPotionId(null);
+    }, 2400);
+
+    if (potionId === 'oracle_serum') {
+      sound.potionDrink();
+      setIsOracleModalOpen(true);
+    } else if (potionId === 'grid_scrambler') {
+      sound.powerup();
+      setIsScrambling(true);
+      setTimeout(() => {
+        setIsScrambling(false);
+      }, 750);
+
+      // Innocent effect: Public announcement for everyone including the Chameleon
+      setActivePotionToast({
+        message: `${activePlayer.name} activated Grid Scrambler — matrix randomized!`,
+        icon: '🌀',
+        style: 'cyan',
+        isChameleonOnly: false,
+      });
+      setTimeout(() => setActivePotionToast(null), 3800);
+
+      // If Chameleon previously used Oracle Serum, Scrambler shatters and strips their insight!
+      if (oracleHighlight) {
+        sound.shatter();
+        setOracleHighlight(null);
+        setOracleShattered(true);
+        setTimeout(() => {
+          setOracleShattered(false);
+        }, 5000);
+      }
+
+      // Scramble the 16 words while keeping the secret target word!
+      const currentTargetWord = secretCoordinate?.item;
+      if (currentTargetWord) {
+        const shuffled = [...category.items].sort(() => Math.random() - 0.5);
+        const newCat: Category = { ...category, items: shuffled };
+        setCategory(newCat);
+        categoryRef.current = newCat;
+
+        const newIndex = shuffled.indexOf(currentTargetWord);
+        const newRIdx = Math.floor(newIndex / 4);
+        const newCIdx = newIndex % 4;
+        const cols: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D'];
+        const rows: Array<1 | 2 | 3 | 4> = [1, 2, 3, 4];
+        const newCoord: Coordinate = {
+          col: cols[newCIdx],
+          row: rows[newRIdx],
+          colIndex: newCIdx,
+          rowIndex: newRIdx,
+          label: `${cols[newCIdx]}${rows[newRIdx]}`,
+          item: currentTargetWord,
+        };
+        setSecretCoordinate(newCoord);
+        secretCoordinateRef.current = newCoord;
+      }
+    } else if (potionId === 'clue_lens') {
+      sound.potionDrink();
+      // Reveals a second player's submitted clue early during clue phase
+      const otherPlayers = players.filter(
+        (p) => p.id !== activePlayer.id && p.id !== impostorPeekPlayerId
+      );
+      if (otherPlayers.length > 0) {
+        const target = otherPlayers.find((p) => p.hasSubmittedClue && p.clue) || otherPlayers[0];
+        setClueLensPeekPlayerId(target.id);
+      }
+
+      // Innocent effect: Public announcement for everyone including the Chameleon
+      setActivePotionToast({
+        message: `${activePlayer.name} activated Clue Lens (inspected an extra clue)!`,
+        icon: '👁️',
+        style: 'cyan',
+        isChameleonOnly: false,
+      });
+      setTimeout(() => setActivePotionToast(null), 3800);
+    } else if (potionId === 'vote_shield') {
+      sound.potionDrink();
+      setActiveVoteShields((prev) => (prev.includes(activePlayer.id) ? prev : [...prev, activePlayer.id]));
+
+      // Innocent effect: Public announcement for everyone including the Chameleon
+      setActivePotionToast({
+        message: `${activePlayer.name} activated Vote Shield (-1 incoming vote penalty)!`,
+        icon: '🛡️',
+        style: 'sky',
+        isChameleonOnly: false,
+      });
+      setTimeout(() => setActivePotionToast(null), 3800);
+    }
+  };
+
+  // Chameleon confirms Ink of Deceit / Clue Forgery
+  const handleConfirmClueForgery = (targetPlayerId: string, newClue: string) => {
+    sound.powerup();
+
+    // Deduct 1 ink_of_deceit
+    setPlayers((prev) =>
+      prev.map((p) => {
+        if (p.id === activePlayer.id) {
+          const nextInv = { ...(p.inventory || {}) };
+          if (nextInv['ink_of_deceit'] > 1) {
+            nextInv['ink_of_deceit'] -= 1;
+          } else {
+            delete nextInv['ink_of_deceit'];
+          }
+          return {
+            ...p,
+            inventory: nextInv,
+          };
+        }
+        return p;
+      })
+    );
+
+    setHasUsedPotionThisTurn(true);
+    setPendingClueForged({ targetPlayerId, newClue });
+    pendingClueForgedRef.current = { targetPlayerId, newClue };
+    setIsClueForgeryModalOpen(false);
+
+    // Sneaky visual bubble strictly on Chameleon only
+    setRecentlyUsedPotionPlayerId(activePlayer.id);
+    setRecentlyUsedPotionId('ink_of_deceit');
+    setTimeout(() => {
+      setRecentlyUsedPotionPlayerId(null);
+      setRecentlyUsedPotionId(null);
+    }, 2400);
+
+    // Chameleon stealth toast (strictly Chameleon eyes)
+    setActivePotionToast({
+      message: 'Ink of Deceit activated: clue forgery prepared silently for voting!',
+      icon: '✒️',
+      style: 'purple',
+      isChameleonOnly: true,
+    });
+    setTimeout(() => setActivePotionToast(null), 4000);
+  };
+
+  // Chameleon confirms Silence Curse on target player
+  const handleConfirmSilence = (targetPlayerId: string) => {
+    const target = players.find((p) => p.id === targetPlayerId);
+    if (!target) return;
+
+    sound.silence();
+
+    // Deduct 1 silence_curse from active player's inventory
+    setPlayers((prev) =>
+      prev.map((p) => {
+        if (p.id === activePlayer.id) {
+          const nextInv = { ...(p.inventory || {}) };
+          if (nextInv['silence_curse'] > 1) {
+            nextInv['silence_curse'] -= 1;
+          } else {
+            delete nextInv['silence_curse'];
+          }
+          return {
+            ...p,
+            inventory: nextInv,
+          };
+        }
+        return p;
+      })
+    );
+
+    setHasUsedPotionThisTurn(true);
+    setSilencedPlayerIds((prev) => (prev.includes(targetPlayerId) ? prev : [...prev, targetPlayerId]));
+    setIsSilenceModalOpen(false);
+
+    setRecentlyUsedPotionPlayerId(activePlayer.id);
+    setRecentlyUsedPotionId('silence_curse');
+    setTimeout(() => {
+      setRecentlyUsedPotionPlayerId(null);
+      setRecentlyUsedPotionId(null);
+    }, 2400);
+
+    // Public announcement toast: everyone knows this player is muted during discussion
+    setActivePotionToast({
+      message: `🤐 ${target.name} has been silenced by an Elixir of Silence! They cannot speak during discussion!`,
+      icon: '🤐',
+      style: 'purple',
+      isChameleonOnly: false,
+    });
+    setTimeout(() => setActivePotionToast(null), 4200);
+
+    // Add entry to round discussion feed
+    setDiscussionMessages((prev) => [
+      ...prev,
+      {
+        id: `sys-${Date.now()}`,
+        playerId: 'system',
+        playerName: 'Game Master',
+        playerAvatar: '⚖️',
+        message: `🤐 ${target.name} was silenced by an Elixir of Silence! Their clue remains visible, but they cannot speak during discussion!`,
+        timestamp: Date.now(),
+      },
+    ]);
+
+    if (gameMode === 'room' && roomId) {
+      socketClient.syncState(roomId, {
+        silencedPlayerIds: [...silencedPlayerIds, targetPlayerId],
+      });
+    }
+  };
+
+  // Handle sending discussion message from active player
+  const handleSendDiscussionMessage = (text: string) => {
+    const isSilenced = silencedPlayerIds.includes(activePlayer.id);
+    if (isSilenced) {
+      sound.click();
+      setActivePotionToast({
+        message: `🤐 You are silenced by the Chameleon! You cannot speak during discussion!`,
+        icon: '🤐',
+        style: 'purple',
+        isChameleonOnly: false,
+      });
+      setTimeout(() => setActivePotionToast(null), 3000);
+      return;
+    }
+
+    sound.click();
+    const newMsg: DiscussionMessage = {
+      id: `msg-${Date.now()}-${activePlayer.id}`,
+      playerId: activePlayer.id,
+      playerName: activePlayer.name,
+      playerAvatar: activePlayer.avatar,
+      message: text,
+      timestamp: Date.now(),
+    };
+
+    setDiscussionMessages((prev) => [...prev, newMsg]);
+
+    if (gameMode === 'room' && roomId) {
+      socketClient.syncState(roomId, {
+        discussionMessages: [...discussionMessages, newMsg],
+      });
+    }
+  };
+
+  // Handle gold investment to boost Chameleon odds
+  const handleUpdateChameleonBoost = (playerId: string, goldAmount: number) => {
+    sound.coin();
+    setPlayers((prev) =>
+      prev.map((p) => {
+        if (p.id === playerId) {
+          return {
+            ...p,
+            chameleonBoostGold: Math.max(0, goldAmount),
+          };
+        }
+        return p;
+      })
+    );
+
+    if (gameMode === 'room' && roomId) {
+      socketClient.syncState(roomId, {
+        players: players.map((p) => (p.id === playerId ? { ...p, chameleonBoostGold: goldAmount } : p)),
+      });
+    }
+  };
+
+  const handleSelectOracleChoice = (choice: 'row' | 'col') => {
+    if (!secretCoordinate) return;
+    sound.powerup();
+    if (choice === 'row') {
+      setOracleHighlight({ type: 'row', value: secretCoordinate.row });
+    } else {
+      setOracleHighlight({ type: 'col', value: secretCoordinate.col });
+    }
+    setHasUsedOracleThisRound(true);
+    setIsOracleModalOpen(false);
+
+    // Chameleon stealth toast (strictly Chameleon eyes)
+    setActivePotionToast({
+      message: `Oracle insight locked: Target word is in ${
+        choice === 'row' ? 'Row ' + (secretCoordinate.rowIndex + 1) : 'Column ' + secretCoordinate.col
+      }!`,
+      icon: '🧪',
+      style: 'purple',
+      isChameleonOnly: true,
+    });
+    setTimeout(() => setActivePotionToast(null), 4000);
   };
 
   // Create room handler from Homepage
@@ -1220,6 +1799,8 @@ export default function App() {
       isHuman: true,
       isHost: true,
       score: 0,
+      gold: 250,
+      inventory: {},
       role: 'innocent',
       clue: '',
       hasSubmittedClue: false,
@@ -1264,6 +1845,8 @@ export default function App() {
       isHuman: true,
       isHost: false,
       score: 0,
+      gold: 250,
+      inventory: {},
       role: 'innocent',
       clue: '',
       hasSubmittedClue: false,
@@ -1402,6 +1985,9 @@ export default function App() {
         isHost={isHost}
         myPlayerId={myPlayerId}
         onKickPlayer={handleKickPlayer}
+        onOpenOddsBooster={() => setIsChameleonBoosterModalOpen(true)}
+        myChameleonOdds={myChameleonOdds}
+        myChameleonBoostGold={activePlayer.chameleonBoostGold}
       />
 
       {/* Main Container */}
@@ -1459,6 +2045,8 @@ export default function App() {
                 roomId={roomId}
                 onLeaveRoom={handleLeaveRoom}
                 isHost={isHost}
+                onOpenOddsBooster={() => setIsChameleonBoosterModalOpen(true)}
+                onUpdateChameleonBoost={handleUpdateChameleonBoost}
               />
             </motion.div>
           ) : (
@@ -1479,11 +2067,24 @@ export default function App() {
                     activePlayerId={activePlayer.id}
                     activePlayerRole={activePlayer.role}
                     impostorPeekPlayerId={impostorPeekPlayerId}
+                    clueLensPeekPlayerId={clueLensPeekPlayerId}
+                    activeVoteShields={activeVoteShields}
                     gamePhase={gamePhase}
                     anonymousVoting={settings.anonymousVoting}
                     canVoteNow={gamePhase === 'voting' && !players.every((p) => Boolean(p.votedForId))}
                     selectedVoteTargetId={selectedVoteTargetId}
                     onSelectVoteTarget={(targetId) => setSelectedVoteTargetId(targetId)}
+                    hasUsedPotionThisTurn={hasUsedPotionThisTurn}
+                    onUsePotion={handleUsePotion}
+                    recentlyUsedPotionPlayerId={recentlyUsedPotionPlayerId}
+                    recentlyUsedPotionId={recentlyUsedPotionId}
+                    activePotionToast={activePotionToast}
+                    inventory={activePlayer.inventory || {}}
+                    gold={activePlayer.gold ?? 0}
+                    pendingClueForged={pendingClueForged}
+                    forgedTargetPlayerId={forgedTargetPlayerId}
+                    silencedPlayerIds={silencedPlayerIds}
+                    onOpenOddsBooster={() => setIsChameleonBoosterModalOpen(true)}
                   />
                 </div>
 
@@ -1498,6 +2099,9 @@ export default function App() {
                     onSelectWordGuess={(word) => setSelectedGuessWord(word)}
                     selectedGuessWord={selectedGuessWord}
                     isPassAndPlay={gameMode === 'pass_and_play'}
+                    oracleHighlight={oracleHighlight}
+                    isScrambling={isScrambling}
+                    oracleShattered={oracleShattered}
                   />
                 </div>
               </div>
@@ -1515,6 +2119,9 @@ export default function App() {
                 onStartEditClue={handleStartEditClue}
                 isEditingClue={isEditingClue}
                 onCancelEditClue={handleCancelEditClue}
+                silencedPlayerIds={silencedPlayerIds}
+                discussionMessages={discussionMessages}
+                onSendDiscussionMessage={handleSendDiscussionMessage}
                 selectedVoteTargetId={selectedVoteTargetId}
                 onSelectVoteTarget={(id) => setSelectedVoteTargetId(id)}
                 onSubmitVote={handleSubmitVote}
@@ -1526,6 +2133,7 @@ export default function App() {
                 roundResolution={roundResolution}
                 onNextRound={handleNextRound}
                 onOpenResolutionModal={() => setIsResolutionModalOpen(true)}
+                roundNumber={roundNumber}
               />
             </motion.div>
           )}
@@ -1569,12 +2177,55 @@ export default function App() {
         targetScore={settings.targetScore}
       />
 
+      {/* THE MYSTIC SHOP MODAL (Triggers every 3 rounds) */}
+      <ShopModal
+        isOpen={gamePhase === 'shop'}
+        player={activePlayer}
+        onBuyPotion={handleBuyPotion}
+        onNextRound={handleExitShop}
+        roundNumber={roundNumber}
+      />
+
+      {/* CHAMELEON ORACLE SERUM PROMPT MODAL */}
+      <OracleSerumModal
+        isOpen={isOracleModalOpen}
+        onClose={() => setIsOracleModalOpen(false)}
+        onSelectChoice={handleSelectOracleChoice}
+      />
+
+      {/* CHAMELEON INK OF DECEIT / CLUE FORGERY MODAL */}
+      <ClueForgeryModal
+        isOpen={isClueForgeryModalOpen}
+        players={players}
+        activePlayerId={activePlayer.id}
+        onConfirmForgery={handleConfirmClueForgery}
+        onClose={() => setIsClueForgeryModalOpen(false)}
+      />
+
       {/* PASS & PLAY PRIVACY SCREEN */}
       <PassAndPlayModal
         isOpen={isPassAndPlayModalOpen && gameMode === 'pass_and_play'}
         player={players[passAndPlayIndex] || null}
         onConfirmReady={() => setIsPassAndPlayModalOpen(false)}
         gamePhase={gamePhase}
+      />
+
+      {/* CHAMELEON SILENCE POTION MODAL */}
+      <SilencePotionModal
+        isOpen={isSilenceModalOpen}
+        players={players}
+        activePlayerId={activePlayer.id}
+        onConfirmSilence={handleConfirmSilence}
+        onClose={() => setIsSilenceModalOpen(false)}
+      />
+
+      {/* CHAMELEON ODDS BOOSTER MODAL (Spend gold to boost role chances) */}
+      <ChameleonBoosterModal
+        isOpen={isChameleonBoosterModalOpen}
+        player={activePlayer}
+        allPlayers={players}
+        onUpdateBoost={handleUpdateChameleonBoost}
+        onClose={() => setIsChameleonBoosterModalOpen(false)}
       />
 
       {/* CREATOR FOOTER REFERENCE */}

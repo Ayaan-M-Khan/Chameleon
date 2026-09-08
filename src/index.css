@@ -173,4 +173,86 @@
   animation: potionSparklePulse 1.2s ease-out;
 }
 
+/* Screen shake / glitch CSS animation on the 4x4 matrix grid */
+@keyframes matrixGlitchShake {
+  0% {
+    transform: translate(0, 0) skew(0deg);
+    filter: drop-shadow(0 0 0 rgba(244, 63, 94, 0));
+  }
+  12% {
+    transform: translate(-5px, 3px) skew(-2.5deg);
+    filter: drop-shadow(-4px 0 8px rgba(244, 63, 94, 0.85)) hue-rotate(90deg);
+  }
+  25% {
+    transform: translate(6px, -4px) skew(2.5deg);
+    filter: drop-shadow(4px 0 8px rgba(168, 85, 247, 0.9));
+  }
+  38% {
+    transform: translate(-4px, -2px) skew(-1.5deg);
+    filter: drop-shadow(-3px -2px 6px rgba(239, 68, 68, 0.9));
+  }
+  50% {
+    transform: translate(5px, 3px) skew(1.5deg);
+    filter: drop-shadow(3px 2px 6px rgba(56, 189, 248, 0.85));
+  }
+  65% {
+    transform: translate(-3px, 2px);
+    filter: drop-shadow(-2px 0 4px rgba(244, 63, 94, 0.6));
+  }
+  80% {
+    transform: translate(2px, -1px);
+    filter: drop-shadow(1px 0 2px rgba(168, 85, 247, 0.4));
+  }
+  92% {
+    transform: translate(-1px, 1px);
+  }
+  100% {
+    transform: translate(0, 0) skew(0deg);
+    filter: drop-shadow(0 0 0 rgba(244, 63, 94, 0));
+  }
+}
+
+.animate-grid-glitch {
+  animation: matrixGlitchShake 0.75s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* Innocent: Vote Shield Shimmer Burst Animation */
+@keyframes shieldShimmerBurst {
+  0% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.9);
+    background-color: rgba(14, 165, 233, 0.2);
+  }
+  40% {
+    box-shadow: 0 0 22px 6px rgba(56, 189, 248, 0.8);
+    background-color: rgba(56, 189, 248, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+  }
+}
+
+.animate-shield-burst {
+  animation: shieldShimmerBurst 1.5s ease-out;
+}
+
+/* Innocent: Clue Lens Inspect Pulse Animation */
+@keyframes lensInspectPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.9);
+    background-color: rgba(6, 182, 212, 0.2);
+  }
+  45% {
+    box-shadow: 0 0 20px 5px rgba(34, 211, 238, 0.75);
+    background-color: rgba(34, 211, 238, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+  }
+}
+
+.animate-lens-pulse {
+  animation: lensInspectPulse 1.4s ease-out;
+}
+
+
 

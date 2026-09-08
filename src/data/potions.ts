@@ -33,4 +33,20 @@ export const POTION_CATALOG: PotionItem[] = [
     roleTarget: 'innocent',
     icon: '🛡️',
   },
+  {
+    id: 'ink_of_deceit',
+    name: 'Ink of Deceit',
+    description: 'Secretly rewrite another player\'s clue. The forged clue takes effect silently once voting begins!',
+    cost: 130,
+    roleTarget: 'fox',
+    icon: '✒️',
+  },
+  {
+    id: 'silence_curse',
+    name: 'Elixir of Silence',
+    description: 'Mute another player from speaking during discussion! Their clue stays visible on the board, but they are silenced.',
+    cost: 110,
+    roleTarget: 'fox',
+    icon: '🤐',
+  },
 ];

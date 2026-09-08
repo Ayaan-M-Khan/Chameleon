@@ -13,6 +13,7 @@ interface RightColumnGridProps {
   isPassAndPlay?: boolean;
   oracleHighlight?: { type: 'row' | 'col'; value: number | string } | null;
   isScrambling?: boolean;
+  oracleShattered?: boolean;
 }
 
 export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
@@ -26,6 +27,7 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
   isPassAndPlay = false,
   oracleHighlight = null,
   isScrambling = false,
+  oracleShattered = false,
 }) => {
   const [showRoleSecret, setShowRoleSecret] = React.useState(!isPassAndPlay);
 
@@ -148,8 +150,8 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
         </div>
       )}
 
-      {/* Active Potion Status Banner */}
-      {oracleHighlight && (
+      {/* Active Potion Status Banner (Chameleon Eyes Only) */}
+      {oracleHighlight && isFox && (
         <div className="mb-3 p-2 bg-purple-950/80 border-2 border-purple-500/80 rounded-lg text-purple-200 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2">
             <span className="text-base select-none">🧪</span>
@@ -166,6 +168,46 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
         </div>
       )}
 
+      {/* Oracle Shattered by Scrambler Banner - Chameleon Eyes */}
+      {oracleShattered && isFox && (
+        <div className="mb-3 p-2.5 bg-rose-950/95 border-2 border-rose-500 rounded-lg text-rose-200 flex items-center justify-between shadow-lg animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="text-xl select-none animate-bounce">💥</span>
+            <div>
+              <span className="text-xs font-mono font-bold block text-rose-100">
+                Oracle Vision Shattered!
+              </span>
+              <span className="text-[11px] font-mono text-rose-300 block">
+                An Innocent used Grid Scrambler — your row/column highlight was nullified!
+              </span>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono font-extrabold uppercase bg-rose-900 px-2 py-0.5 rounded border border-rose-400">
+            Nullified
+          </span>
+        </div>
+      )}
+
+      {/* Oracle Shattered by Scrambler Banner - Innocent Eyes */}
+      {oracleShattered && !isFox && (
+        <div className="mb-3 p-2.5 bg-amber-950/90 border-2 border-amber-400 rounded-lg text-amber-100 flex items-center justify-between shadow-lg animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="text-xl select-none">⚡</span>
+            <div>
+              <span className="text-xs font-mono font-bold block text-amber-200">
+                Oracle Vision Shattered!
+              </span>
+              <span className="text-[11px] font-mono text-amber-300 block">
+                The Grid Scrambler disrupted the matrix and broke the psychic sight!
+              </span>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono font-extrabold uppercase bg-amber-900 px-2 py-0.5 rounded border border-amber-400">
+            Disrupted
+          </span>
+        </div>
+      )}
+
       {isScrambling && (
         <div className="mb-3 p-2 bg-cyan-950/80 border-2 border-cyan-400 rounded-lg text-cyan-200 flex items-center justify-between shadow-md animate-pulse">
           <div className="flex items-center gap-2">
@@ -177,15 +219,15 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
         </div>
       )}
 
-      {/* 4x4 Grid Matrix Container */}
-      <div className={`flex-1 flex flex-col justify-center ${isScrambling ? 'animate-scramble' : ''}`}>
+      {/* 4x4 Grid Matrix Container with Glitch/Shake on Shatter */}
+      <div className={`flex-1 flex flex-col justify-center ${oracleShattered ? 'animate-grid-glitch' : isScrambling ? 'animate-scramble' : ''}`}>
         {/* Labeled Column Headers: A, B, C, D */}
         <div className="grid grid-cols-[36px_repeat(4,1fr)] gap-1.5 mb-1.5 text-center font-display font-bold text-slate-300 text-xs sm:text-sm">
           <div className="flex items-center justify-center font-mono text-[10px] text-slate-500">
             #
           </div>
           {colHeaders.map((col) => {
-            const isColOracle = oracleHighlight?.type === 'col' && oracleHighlight.value === col;
+            const isColOracle = isFox && oracleHighlight?.type === 'col' && oracleHighlight.value === col;
             return (
               <div
                 key={col}
@@ -204,7 +246,7 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
         {/* Rows 1 to 4 with Row Numbers */}
         <div className="space-y-1.5">
           {rowNumbers.map((rowNum, rIdx) => {
-            const isRowOracle = oracleHighlight?.type === 'row' && oracleHighlight.value === rowNum;
+            const isRowOracle = isFox && oracleHighlight?.type === 'row' && oracleHighlight.value === rowNum;
             return (
               <div key={rowNum} className="grid grid-cols-[36px_repeat(4,1fr)] gap-1.5 items-stretch">
                 {/* Row Number Header */}
@@ -225,6 +267,7 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
                   const isTarget = !isFox && showRoleSecret && isTargetCell(rowNum, colChar);
                   const isSelectedForGuess = selectedGuessWord === item;
                   const isOracleHighlighted =
+                    isFox &&
                     Boolean(oracleHighlight) &&
                     ((oracleHighlight?.type === 'row' && oracleHighlight.value === rowNum) ||
                       (oracleHighlight?.type === 'col' && oracleHighlight.value === colChar));

@@ -22,11 +22,23 @@ export interface Player {
   score: number;
   gold?: number;
   inventory?: PlayerInventory;
+  chameleonBoostGold?: number;
+  isMuted?: boolean;
   role: PlayerRole;
   clue: string;
   hasSubmittedClue: boolean;
   votedForId: string | null;
   isReady: boolean;
+}
+
+export interface DiscussionMessage {
+  id: string;
+  playerId: string;
+  playerName: string;
+  playerAvatar: string;
+  message: string;
+  timestamp: number;
+  isSilencedAttempt?: boolean;
 }
 
 export interface Coordinate {

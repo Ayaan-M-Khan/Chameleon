@@ -49,6 +49,8 @@ interface LobbyViewProps {
   onLeaveRoom?: () => void;
   isHost?: boolean;
   myPlayerId?: string;
+  onOpenOddsBooster?: () => void;
+  onUpdateChameleonBoost?: (playerId: string, gold: number) => void;
 }
 
 export const LobbyView: React.FC<LobbyViewProps> = ({
@@ -68,6 +70,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onLeaveRoom,
   isHost = true,
   myPlayerId,
+  onOpenOddsBooster,
+  onUpdateChameleonBoost,
 }) => {
   const [copiedCode, setCopiedCode] = React.useState(false);
   const [copiedInvite, setCopiedInvite] = React.useState(false);
@@ -91,6 +95,25 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
       onUpdateSettings(updates);
     }
   };
+
+  // Chameleon odds calculation for lobby
+  const selfPlayer = players.find((p) => (myPlayerId ? p.id === myPlayerId : p.isHuman)) || players[0];
+  const ticketStats = React.useMemo(() => {
+    const list = players.map((p) => {
+      const boostGold = p.chameleonBoostGold ?? 0;
+      const tickets = 1 + Math.floor(boostGold / 50);
+      const isSelf = p.id === selfPlayer?.id;
+      return { player: p, tickets, boostGold, isSelf };
+    });
+    const totalTickets = list.reduce((a, b) => a + b.tickets, 0);
+    return list.map((item) => ({
+      ...item,
+      percentage: totalTickets > 0 ? (item.tickets / totalTickets) * 100 : 0,
+      totalTickets,
+    }));
+  }, [players, selfPlayer]);
+
+  const selfStats = ticketStats.find((s) => s.isSelf);
 
   const timerDurations = [30, 45, 60, 90, 120];
   const targetScores = [5, 8, 10, 15, 0];
@@ -325,6 +348,99 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   </div>
                 );
               })}
+            </div>
+
+            {/* Chameleon Role Odds & Gold Booster Section */}
+            <div className="mt-4 p-3.5 rounded-xl bg-slate-900/90 border-2 border-amber-500/50 shadow-md">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl select-none">🦎</span>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-display font-black uppercase tracking-wider text-amber-300">
+                      Chameleon Role Odds Booster
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-mono">
+                      Spend gold to increase your chances of being chosen as Chameleon
+                    </p>
+                  </div>
+                </div>
+
+                {onOpenOddsBooster && (
+                  <button
+                    type="button"
+                    onClick={onOpenOddsBooster}
+                    className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-display font-bold text-xs uppercase rounded-lg cursor-pointer transition-colors shadow-xs"
+                  >
+                    Details
+                  </button>
+                )}
+              </div>
+
+              {/* Probability Bar */}
+              <div className="w-full h-2.5 rounded-full overflow-hidden bg-slate-950 flex border border-slate-800 my-2">
+                {ticketStats.map((item, idx) => {
+                  const colors = ['bg-emerald-500', 'bg-purple-500', 'bg-amber-500', 'bg-sky-500', 'bg-rose-500'];
+                  const color = item.isSelf ? 'bg-amber-400' : colors[idx % colors.length];
+                  return (
+                    <div
+                      key={item.player.id}
+                      style={{ width: `${item.percentage}%` }}
+                      className={`h-full ${color} transition-all duration-300`}
+                      title={`${item.player.name}: ${item.percentage.toFixed(1)}%`}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Self Odds Summary and Quick Boost Buttons */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-slate-800 text-xs font-mono">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-300">
+                    Your Chance: <strong className="text-yellow-300 text-sm font-bold">{selfStats ? selfStats.percentage.toFixed(1) : '25.0'}%</strong>
+                  </span>
+                  <span className="text-[10px] text-amber-300 bg-amber-950 px-1.5 py-0.5 rounded border border-amber-600/50 font-bold">
+                    🪙 {selfStats?.boostGold || 0}g ({selfStats?.tickets || 1} 🎟️)
+                  </span>
+                </div>
+
+                {onUpdateChameleonBoost && selfPlayer && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onUpdateChameleonBoost(selfPlayer.id, 0)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] border cursor-pointer ${
+                        (selfPlayer.chameleonBoostGold || 0) === 0
+                          ? 'bg-slate-700 text-white border-slate-500 font-bold'
+                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                      }`}
+                    >
+                      Base (0g)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateChameleonBoost(selfPlayer.id, 50)}
+                      className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${
+                        selfPlayer.chameleonBoostGold === 50
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 font-bold'
+                          : 'bg-amber-950/80 text-amber-300 border-amber-600/60 hover:bg-amber-900'
+                      }`}
+                    >
+                      +50g (+1🎟️)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateChameleonBoost(selfPlayer.id, 100)}
+                      className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${
+                        selfPlayer.chameleonBoostGold === 100
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 font-bold'
+                          : 'bg-amber-950/80 text-amber-300 border-amber-600/60 hover:bg-amber-900'
+                      }`}
+                    >
+                      +100g (+2🎟️)
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

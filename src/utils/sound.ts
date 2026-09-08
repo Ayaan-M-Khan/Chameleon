@@ -217,6 +217,87 @@ class SoundFX {
       // Ignore audio errors
     }
   }
+
+  // Glitch / glass shatter sound effect for nullified Oracle effect
+  glitchShatter() {
+    this.shatter();
+  }
+
+  // Crystal / Oracle shatter sound effect
+  shatter() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      // High-pitched crystal fracture bursts + dissonant descending pitch cluster
+      [1800, 1420, 1100, 720, 480, 220].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = idx % 2 === 0 ? 'sawtooth' : 'triangle';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.025);
+        osc.frequency.exponentialRampToValueAtTime(80, now + idx * 0.025 + 0.32);
+
+        gain.gain.setValueAtTime(0.18 / (idx + 1), now + idx * 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.025 + 0.35);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.025);
+        osc.stop(now + idx * 0.025 + 0.35);
+      });
+    } catch {
+      // Ignore audio errors
+    }
+  }
+
+  // Muffled silence curse sound effect
+  silence() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(75, now + 0.35);
+
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.38);
+    } catch {
+      // Ignore audio errors
+    }
+  }
+
+  // Metallic gold coin clink sound effect
+  coin() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      [987.77, 1318.51].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+
+        gain.gain.setValueAtTime(0.12, now + idx * 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.18);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.05);
+        osc.stop(now + idx * 0.05 + 0.18);
+      });
+    } catch {
+      // Ignore audio errors
+    }
+  }
 }
 
 export const sound = new SoundFX();

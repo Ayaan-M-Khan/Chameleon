@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, CheckCircle2, AlertOctagon, RotateCcw, Trophy, Sparkles, Clock, ArrowRight, Eye, Edit3, X } from 'lucide-react';
-import { Player, GamePhase, RoundResolution, GameSettings } from '../types';
+import { Send, CheckCircle2, AlertOctagon, RotateCcw, Trophy, Sparkles, Clock, ArrowRight, Eye, Edit3, X, MessageSquare, VolumeX, Lock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Player, GamePhase, RoundResolution, GameSettings, DiscussionMessage } from '../types';
 
 interface ActionTrayProps {
   gamePhase: GamePhase;
@@ -16,6 +16,10 @@ interface ActionTrayProps {
   onStartEditClue?: () => void;
   isEditingClue?: boolean;
   onCancelEditClue?: () => void;
+  // Discussion & Mute
+  silencedPlayerIds?: string[];
+  discussionMessages?: DiscussionMessage[];
+  onSendDiscussionMessage?: (message: string) => void;
   // Voting
   selectedVoteTargetId: string | null;
   onSelectVoteTarget: (id: string) => void;
@@ -30,6 +34,7 @@ interface ActionTrayProps {
   roundResolution: RoundResolution | null;
   onNextRound: () => void;
   onOpenResolutionModal?: () => void;
+  roundNumber?: number;
 }
 
 export const ActionTray: React.FC<ActionTrayProps> = ({
@@ -44,9 +49,12 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
   onStartEditClue,
   isEditingClue = false,
   onCancelEditClue,
+  silencedPlayerIds = [],
+  discussionMessages = [],
+  onSendDiscussionMessage,
   selectedVoteTargetId,
-  onSelectVoteTarget,
   onSubmitVote,
+  onSelectVoteTarget,
   hasCurrentPlayerVoted,
   selectedGuessWord,
   onSubmitFoxGuess,
@@ -55,8 +63,21 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
   roundResolution,
   onNextRound,
   onOpenResolutionModal,
+  roundNumber,
 }) => {
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const [discussionInput, setDiscussionInput] = React.useState('');
+  const [isDiscussionOpen, setIsDiscussionOpen] = React.useState(true);
+
+  const isCurrentPlayerSilenced = silencedPlayerIds.includes(activePlayer.id);
+
+  const handleSendDiscussion = (presetText?: string) => {
+    const text = (presetText || discussionInput).trim();
+    if (!text || !onSendDiscussionMessage) return;
+    if (isCurrentPlayerSilenced) return;
+    onSendDiscussionMessage(text);
+    setDiscussionInput('');
+  };
 
   React.useEffect(() => {
     if (gamePhase === 'clue_submission' && !activePlayer.hasSubmittedClue) {
@@ -320,6 +341,145 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
               </div>
             )}
 
+            {/* Round Discussion & Accusations Feed */}
+            <div className="mb-3.5 bg-slate-900/90 border border-slate-700/80 rounded-xl overflow-hidden shadow-md">
+              <div
+                onClick={() => setIsDiscussionOpen((prev) => !prev)}
+                className="px-3 py-2 bg-slate-800/80 border-b border-slate-700/80 flex items-center justify-between cursor-pointer hover:bg-slate-800 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-emerald-400" />
+                  <span className="font-display font-black text-xs uppercase tracking-wider text-slate-200">
+                    Round Discussion & Debate
+                  </span>
+                  {isCurrentPlayerSilenced ? (
+                    <span className="text-[10px] font-mono font-bold bg-rose-950 text-rose-300 border border-rose-600 px-1.5 py-0.2 rounded flex items-center gap-1 animate-pulse">
+                      <VolumeX className="w-2.5 h-2.5" /> Silenced (Can't Speak)
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950/80 border border-emerald-600/50 px-1.5 py-0.2 rounded">
+                      {discussionMessages.length} Messages
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 text-slate-400 text-xs">
+                  <span className="text-[11px]">{isDiscussionOpen ? 'Hide' : 'Show'}</span>
+                  {isDiscussionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </div>
+              </div>
+
+              {isDiscussionOpen && (
+                <div className="p-3 space-y-2.5">
+                  {/* Messages Feed */}
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                    {discussionMessages.length === 0 ? (
+                      <div className="text-center py-2 text-slate-400 italic text-[11px]">
+                        No accusations yet! Point out suspicious clues or defend yourself below.
+                      </div>
+                    ) : (
+                      discussionMessages.map((msg) => {
+                        const isSelf = msg.playerId === activePlayer.id;
+                        const wasSilenced = msg.isSilencedAttempt;
+                        return (
+                          <div
+                            key={msg.id}
+                            className={`p-2 rounded-lg flex items-start gap-2 border ${
+                              wasSilenced
+                                ? 'bg-rose-950/40 border-rose-700/50 text-rose-200'
+                                : isSelf
+                                ? 'bg-purple-950/50 border-purple-600/40 text-purple-100'
+                                : 'bg-slate-800/70 border-slate-700 text-slate-200'
+                            }`}
+                          >
+                            <span className="text-base select-none shrink-0">{msg.playerAvatar}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className="font-bold text-[11px] text-white">
+                                  {msg.playerName}
+                                </span>
+                                {isSelf && (
+                                  <span className="text-[9px] bg-purple-900 text-purple-200 px-1 rounded font-bold">
+                                    YOU
+                                  </span>
+                                )}
+                                {wasSilenced && (
+                                  <span className="text-[9px] bg-rose-900 text-rose-200 px-1 rounded font-mono font-bold flex items-center gap-0.5">
+                                    <VolumeX className="w-2.5 h-2.5" /> MUTED
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs leading-relaxed break-words font-sans">
+                                {msg.message}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Input / Silenced Barrier */}
+                  {isCurrentPlayerSilenced ? (
+                    <div className="p-2.5 bg-rose-950/60 border border-rose-500/60 rounded-lg text-xs text-rose-200 flex items-center gap-2">
+                      <VolumeX className="w-4 h-4 text-rose-400 shrink-0" />
+                      <div>
+                        <strong className="font-bold text-rose-300">You are silenced! </strong>
+                        <span>The Chameleon's Elixir of Silence prevents you from speaking or debating. Your clue is still shown above!</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 pt-1 border-t border-slate-800">
+                      {/* Quick Debate Reactions */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] scrollbar-none">
+                        {[
+                          "My clue connects directly! 🎯",
+                          "That clue is way too vague! 🤨",
+                          "Look at the board coordinates! 🗺️",
+                          "I'm 100% innocent! 😇",
+                          "Suspect the quiet ones! 🕵️",
+                        ].map((chip) => (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() => handleSendDiscussion(chip)}
+                            className="shrink-0 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-md border border-slate-700 cursor-pointer transition-colors"
+                          >
+                            {chip}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Text input and send */}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={discussionInput}
+                          onChange={(e) => setDiscussionInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleSendDiscussion();
+                            }
+                          }}
+                          placeholder="Type your defense or call out a suspect..."
+                          className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400"
+                        />
+                        <button
+                          type="button"
+                          disabled={!discussionInput.trim()}
+                          onClick={() => handleSendDiscussion()}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-lg font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Send</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Clickable Player Badges */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 mb-3">
               {players
@@ -327,6 +487,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                 .map((p) => {
                   const isSelected = selectedVoteTargetId === p.id;
                   const isMyVotedTarget = activePlayer.votedForId === p.id;
+                  const isTargetSilenced = silencedPlayerIds.includes(p.id);
                   return (
                     <button
                       key={p.id}
@@ -342,13 +503,18 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                     >
                       <span className="text-xl shrink-0">{p.avatar}</span>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 flex-wrap">
                           <span className="font-bold text-xs truncate leading-tight">
                             {p.name}
                           </span>
                           {isMyVotedTarget && (
                             <span className="text-[9px] bg-purple-950 text-yellow-300 font-bold px-1 rounded">
                               ✓ Voted
+                            </span>
+                          )}
+                          {isTargetSilenced && (
+                            <span className="text-[9px] bg-rose-950 text-rose-300 border border-rose-600 font-bold px-1 rounded flex items-center gap-0.5" title="Muted by Chameleon">
+                              🤐 Muted
                             </span>
                           )}
                         </div>
@@ -529,13 +695,23 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                   </button>
                 )}
 
-                <button
-                  onClick={onNextRound}
-                  className="retro-button px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md"
-                >
-                  <span>Next Round</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                {roundNumber && roundNumber % 3 === 0 ? (
+                  <button
+                    onClick={onNextRound}
+                    className="retro-button px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md border-amber-300"
+                  >
+                    <span>Proceed to Shop 🛒</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={onNextRound}
+                    className="retro-button px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <span>Next Round</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>

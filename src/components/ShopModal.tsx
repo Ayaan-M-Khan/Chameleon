@@ -253,9 +253,9 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                   🎒 Your Current Potions:
                 </span>
                 <div className="flex items-center gap-3 font-mono font-bold text-[11px]">
-                  {Object.entries(player.inventory || {}).filter(([_, qty]) => qty > 0).length > 0 ? (
+                  {Object.entries(player.inventory || {}).filter(([_, qty]) => Number(qty) > 0).length > 0 ? (
                     Object.entries(player.inventory || {})
-                      .filter(([_, qty]) => qty > 0)
+                      .filter(([_, qty]) => Number(qty) > 0)
                       .map(([potId, qty]) => {
                         const item = POTION_CATALOG.find((p) => p.id === potId);
                         return (
