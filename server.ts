@@ -137,9 +137,12 @@ app.post('/api/rooms/create', (req, res) => {
     turnTimer: true,
     turnTimerSeconds: 60,
     privateGame: false,
-    chameleonCount: 1,
+    infiltratorCount: 1,
     targetScore: 5,
     innocentCatchPoints: 2,
+    infiltratorEscapePoints: 2,
+    infiltratorStealPoints: 1,
+    chameleonCount: 1,
     chameleonEscapePoints: 2,
     chameleonStealPoints: 1,
     ...settings,
@@ -191,10 +194,13 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
       turnTimer: true,
       turnTimerSeconds: 60,
       privateGame: false,
+      infiltratorCount: 1,
       chameleonCount: 1,
       targetScore: 5,
       innocentCatchPoints: 2,
+      infiltratorEscapePoints: 2,
       chameleonEscapePoints: 2,
+      infiltratorStealPoints: 1,
       chameleonStealPoints: 1,
       itemsEnabled: true,
       roomPassword: password || '',
@@ -306,7 +312,7 @@ app.post('/api/rooms/:roomId/sync', (req, res) => {
   res.json({ success: true, room });
 });
 
-// Update room settings (chameleon count, times, points, etc.)
+// Update room settings (infiltrator count, times, points, etc.)
 app.post('/api/rooms/:roomId/settings', (req, res) => {
   const { roomId } = req.params;
   const room = rooms.get(roomId);
@@ -349,12 +355,18 @@ app.post('/api/rooms/:roomId/bot', (req, res) => {
   res.json({ success: true, room });
 });
 
-// Remove or kick player from room
+// Remove or kick player from room (Only host can kick others)
 app.delete('/api/rooms/:roomId/players/:playerId', (req, res) => {
   const { roomId, playerId } = req.params;
   const isKick = req.query.kick === 'true' || req.body?.isKick;
+  const requesterId = (req.query.requesterId as string) || req.body?.requesterId || (req.headers['x-player-id'] as string);
   const room = rooms.get(roomId);
   if (!room) return res.status(404).json({ error: 'Room not found' });
+
+  // Security: Only the host may kick other players
+  if (isKick && requesterId && room.hostId && requesterId !== room.hostId && requesterId !== playerId) {
+    return res.status(403).json({ error: 'Only the host can kick players from the room' });
+  }
 
   room.players = room.players.filter((p) => p.id !== playerId);
   room.lastActive = Date.now();
@@ -442,10 +454,13 @@ async function startServer() {
                 turnTimer: true,
                 turnTimerSeconds: 60,
                 privateGame: false,
+                infiltratorCount: 1,
                 chameleonCount: 1,
                 targetScore: 5,
                 innocentCatchPoints: 2,
+                infiltratorEscapePoints: 2,
                 chameleonEscapePoints: 2,
+                infiltratorStealPoints: 1,
                 chameleonStealPoints: 1,
                 roomPassword: password || '',
               },

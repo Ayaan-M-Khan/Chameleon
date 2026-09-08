@@ -238,16 +238,16 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                 <span className="text-[10px] text-slate-400 block">Infiltrator Escapes</span>
                 <div className="flex items-center justify-between mt-1">
                   <span className="text-xs font-mono font-bold text-purple-300">
-                    +{settings.chameleonEscapePoints || 2} pts
+                    +{settings.infiltratorEscapePoints ?? settings.chameleonEscapePoints ?? 2} pts
                   </span>
                   <div className="flex gap-1">
                     {[2, 3, 4].map((val) => (
                       <button
                         key={val}
                         type="button"
-                        onClick={() => onUpdateSettings({ chameleonEscapePoints: val })}
+                        onClick={() => onUpdateSettings({ infiltratorEscapePoints: val, chameleonEscapePoints: val })}
                         className={`w-5 h-5 rounded text-[10px] font-mono font-bold flex items-center justify-center cursor-pointer ${
-                          (settings.chameleonEscapePoints || 2) === val
+                          (settings.infiltratorEscapePoints ?? settings.chameleonEscapePoints ?? 2) === val
                             ? 'bg-purple-400 text-slate-950'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
                         }`}
@@ -263,16 +263,16 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                 <span className="text-[10px] text-slate-400 block">Caught Word Steal</span>
                 <div className="flex items-center justify-between mt-1">
                   <span className="text-xs font-mono font-bold text-amber-300">
-                    +{settings.chameleonStealPoints || 1} pt{(settings.chameleonStealPoints || 1) > 1 ? 's' : ''}
+                    +{settings.infiltratorStealPoints ?? settings.chameleonStealPoints ?? 1} pt{(settings.infiltratorStealPoints ?? settings.chameleonStealPoints ?? 1) > 1 ? 's' : ''}
                   </span>
                   <div className="flex gap-1">
                     {[1, 2, 3].map((val) => (
                       <button
                         key={val}
                         type="button"
-                        onClick={() => onUpdateSettings({ chameleonStealPoints: val })}
+                        onClick={() => onUpdateSettings({ infiltratorStealPoints: val, chameleonStealPoints: val })}
                         className={`w-5 h-5 rounded text-[10px] font-mono font-bold flex items-center justify-center cursor-pointer ${
-                          (settings.chameleonStealPoints || 1) === val
+                          (settings.infiltratorStealPoints ?? settings.chameleonStealPoints ?? 1) === val
                             ? 'bg-amber-400 text-slate-950'
                             : 'bg-slate-800 text-slate-400 hover:text-white'
                         }`}

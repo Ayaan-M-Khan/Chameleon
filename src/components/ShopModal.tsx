@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Coins, ArrowRight, ShieldCheck, Check, ShoppingBag, Info, AlertCircle } from 'lucide-react';
-import { Player, PotionItem } from '../types';
+import { Player, PotionItem, GameMode } from '../types';
 import { POTION_CATALOG } from '../data/potions';
 import { sound } from '../utils/sound';
 
@@ -11,6 +11,8 @@ interface ShopModalProps {
   onBuyPotion: (potionId: string, cost: number) => void;
   onNextRound: () => void;
   roundNumber: number;
+  isHost?: boolean;
+  gameMode?: GameMode;
 }
 
 export const ShopModal: React.FC<ShopModalProps> = ({
@@ -19,13 +21,15 @@ export const ShopModal: React.FC<ShopModalProps> = ({
   onBuyPotion,
   onNextRound,
   roundNumber,
+  isHost = true,
+  gameMode = 'pass_and_play',
 }) => {
   const [justPurchasedId, setJustPurchasedId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const currentGold = player.gold ?? 0;
-  const isChameleon = player.role === 'fox';
+  const isInfiltrator = player.role === 'fox';
 
   const handleBuy = (item: PotionItem) => {
     if (currentGold < item.cost) return;
@@ -124,11 +128,11 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                 <div className="flex items-center justify-between font-mono text-[11px]">
                   <span className="text-slate-400">Current Secret Role:</span>
                   <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] uppercase border ${
-                    isChameleon
+                    isInfiltrator
                       ? 'bg-rose-950 text-yellow-300 border-rose-500'
                       : 'bg-emerald-950 text-emerald-300 border-emerald-500'
                   }`}>
-                    {isChameleon ? '🕵️ The Infiltrator' : '🎯 Innocent'}
+                    {isInfiltrator ? '🕵️ The Infiltrator' : '🎯 Innocent'}
                   </span>
                 </div>
 
@@ -156,8 +160,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                   {POTION_CATALOG.map((item) => {
                     const isRoleCompatible =
                       item.roleTarget === 'all' ||
-                      (item.roleTarget === 'fox' && isChameleon) ||
-                      (item.roleTarget === 'innocent' && !isChameleon);
+                      (item.roleTarget === 'fox' && isInfiltrator) ||
+                      (item.roleTarget === 'innocent' && !isInfiltrator);
 
                     const canAfford = currentGold >= item.cost;
                     const isPurchasable = isRoleCompatible && canAfford;
@@ -282,16 +286,23 @@ export const ShopModal: React.FC<ShopModalProps> = ({
               </span>
             </div>
 
-            <button
-              onClick={() => {
-                sound.click();
-                onNextRound();
-              }}
-              className="w-full sm:w-auto retro-button px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-transform shrink-0"
-            >
-              <span>Ready / Next Round</span>
-              <ArrowRight className="w-4 h-4 text-slate-950" />
-            </button>
+            {gameMode === 'room' && !isHost ? (
+              <div className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 font-mono text-xs font-bold shrink-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                Waiting for host to start Round {roundNumber + 1}…
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  sound.click();
+                  onNextRound();
+                }}
+                className="w-full sm:w-auto retro-button px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-transform shrink-0"
+              >
+                <span>Ready / Next Round</span>
+                <ArrowRight className="w-4 h-4 text-slate-950" />
+              </button>
+            )}
           </div>
         </motion.div>
       </div>

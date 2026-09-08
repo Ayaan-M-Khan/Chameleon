@@ -1,6 +1,5 @@
 /**
- * The Fox - Social Deduction Word Game
- * Based on "The Chameleon" board game mechanics
+ * The Infiltrator - Social Deduction Word Game
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -25,14 +24,14 @@ import { ActionTray } from './components/ActionTray';
 import { LobbyView } from './components/LobbyView';
 import { OptionsModal } from './components/OptionsModal';
 import { RulesModal } from './components/RulesModal';
-import { ChameleonGuessModal } from './components/ChameleonGuessModal';
+import { InfiltratorGuessModal } from './components/InfiltratorGuessModal';
 import { RoundResolutionModal } from './components/RoundResolutionModal';
 import { PassAndPlayModal } from './components/PassAndPlayModal';
 import { ShopModal } from './components/ShopModal';
 import { OracleSerumModal } from './components/OracleSerumModal';
 import { ClueForgeryModal } from './components/ClueForgeryModal';
 import { SilencePotionModal } from './components/SilencePotionModal';
-import { ChameleonBoosterModal } from './components/ChameleonBoosterModal';
+import { InfiltratorBoosterModal } from './components/InfiltratorBoosterModal';
 import { HomeView } from './components/HomeView';
 import { parseInviteUrl } from './utils/inviteUrl';
 import { socketClient } from './utils/socketClient';
@@ -54,13 +53,17 @@ const DEFAULT_SETTINGS: GameSettings = {
   turnTimer: false,
   turnTimerSeconds: 60,
   privateGame: false,
+  infiltratorCount: 1,
   chameleonCount: 1,
   targetScore: 5,
   innocentCatchPoints: 2,
+  infiltratorEscapePoints: 2,
   chameleonEscapePoints: 2,
+  infiltratorStealPoints: 1,
   chameleonStealPoints: 1,
   categoryDeckMode: 'random',
   categoryPool: CATEGORIES.map((c) => c.id),
+  itemsEnabled: true,
 };
 
 // Initial default 4 players (1 human + 3 bots)
@@ -135,10 +138,10 @@ export default function App() {
   const myPlayerId = useRef<string>(
     typeof window !== 'undefined'
       ? (() => {
-          const stored = sessionStorage.getItem('chameleon_player_id');
+          const stored = sessionStorage.getItem('infiltrator_player_id') || sessionStorage.getItem('chameleon_player_id');
           if (stored) return stored;
           const gen = `p-${Math.random().toString(36).substring(2, 8)}`;
-          sessionStorage.setItem('chameleon_player_id', gen);
+          sessionStorage.setItem('infiltrator_player_id', gen);
           return gen;
         })()
       : 'player-1'
@@ -149,7 +152,7 @@ export default function App() {
     if (inviteInfo.roomId) return inviteInfo.roomId;
     if (typeof window !== 'undefined') {
       const hash = window.location.hash.replace('#', '').trim();
-      if (hash && (hash.startsWith('CHAM-') || hash.startsWith('FOX-'))) return hash;
+      if (hash && (hash.startsWith('INF-') || hash.startsWith('CHAM-') || hash.startsWith('FOX-'))) return hash;
     }
     return '';
   });
@@ -182,7 +185,7 @@ export default function App() {
   const [selectedGuessWord, setSelectedGuessWord] = useState<string | null>(null);
   const [roundResolution, setRoundResolution] = useState<RoundResolution | null>(null);
 
-  // Single random clue revealed exclusively to the Chameleon during clue_submission
+  // Single random clue revealed exclusively to the Infiltrator during clue_submission
   const [impostorPeekPlayerId, setImpostorPeekPlayerId] = useState<string | null>(null);
 
   // Bot timeouts ref for clean lifecycle and pause/resume during clue editing
@@ -222,7 +225,7 @@ export default function App() {
   const [isRulesOpen, setIsRulesOpen] = useState(false);
   const [isFoxGuessModalOpen, setIsFoxGuessModalOpen] = useState(false);
   const [isResolutionModalOpen, setIsResolutionModalOpen] = useState(false);
-  const [caughtChameleonId, setCaughtChameleonId] = useState<string | null>(null);
+  const [caughtInfiltratorId, setCaughtInfiltratorId] = useState<string | null>(null);
 
   // Shop & Potion States
   const [hasUsedPotionThisTurn, setHasUsedPotionThisTurn] = useState(false);
@@ -238,6 +241,7 @@ export default function App() {
     message: string;
     icon: string;
     style: 'sky' | 'cyan' | 'purple' | 'amber';
+    isInfiltratorOnly?: boolean;
     isChameleonOnly?: boolean;
   } | null>(null);
   const [isClueForgeryModalOpen, setIsClueForgeryModalOpen] = useState(false);
@@ -250,8 +254,8 @@ export default function App() {
   const [silencedPlayerIds, setSilencedPlayerIds] = useState<string[]>([]);
   const [isSilenceModalOpen, setIsSilenceModalOpen] = useState(false);
 
-  // Chameleon odds booster state
-  const [isChameleonBoosterModalOpen, setIsChameleonBoosterModalOpen] = useState(false);
+  // Infiltrator odds booster state
+  const [isInfiltratorBoosterModalOpen, setIsInfiltratorBoosterModalOpen] = useState(false);
 
   // Round discussion and accusations messages
   const [discussionMessages, setDiscussionMessages] = useState<DiscussionMessage[]>([]);
@@ -460,6 +464,12 @@ export default function App() {
 
   // Setup New Round
   const startNewRound = useCallback((keepScores = true) => {
+    // Only the host may start the game or begin the next round in multiplayer rooms
+    if (gameMode === 'room' && !isHost) {
+      console.warn('Only the room host can start the round');
+      return;
+    }
+
     sound.click();
 
     // 1. Determine Category
@@ -501,12 +511,12 @@ export default function App() {
     setSecretCoordinate(coord);
     secretCoordinateRef.current = coord;
 
-    // 3. Secretly assign FOX / Chameleon based on settings.chameleonCount and gold-based lottery weights
-    const count = Math.min(settings.chameleonCount || 1, Math.max(1, Math.floor(players.length / 2)));
+    // 3. Secretly assign FOX / Infiltrator based on settings.infiltratorCount and gold-based lottery weights
+    const count = Math.min(settings.infiltratorCount ?? settings.chameleonCount ?? 1, Math.max(1, Math.floor(players.length / 2)));
 
     // Calculate tickets for each player: 1 base ticket + 1 ticket per 50 gold invested
     const playerTickets = players.map((p) => {
-      const boostGold = p.chameleonBoostGold || 0;
+      const boostGold = p.infiltratorBoostGold ?? p.chameleonBoostGold ?? 0;
       return 1 + Math.floor(boostGold / 50);
     });
 
@@ -533,7 +543,7 @@ export default function App() {
     setFoxPlayerId(assignedFoxId);
 
     // Toast feedback if the active player invested gold for boost
-    const activeBoost = activePlayer.chameleonBoostGold || 0;
+    const activeBoost = activePlayer.infiltratorBoostGold ?? activePlayer.chameleonBoostGold ?? 0;
     const activeIsChosenFox = chosenFoxIndices.has(players.findIndex((p) => p.id === activePlayer.id));
     if (activeBoost > 0) {
       if (activeIsChosenFox) {
@@ -542,6 +552,7 @@ export default function App() {
           message: `🕵️ Your gold bribe succeeded! You were chosen as The Infiltrator!`,
           icon: '🕵️',
           style: 'amber',
+          isInfiltratorOnly: true,
           isChameleonOnly: true,
         });
         setTimeout(() => setActivePotionToast(null), 4500);
@@ -550,6 +561,7 @@ export default function App() {
           message: `🪙 Your Infiltrator boost (${Math.floor(activeBoost / 50)} extra tickets) was used this round!`,
           icon: '🪙',
           style: 'amber',
+          isInfiltratorOnly: true,
           isChameleonOnly: true,
         });
         setTimeout(() => setActivePotionToast(null), 3500);
@@ -558,7 +570,7 @@ export default function App() {
 
     // Reset players for new round & deduct consumed boost gold
     const updatedPlayers: Player[] = players.map((p, idx) => {
-      const boostSpent = p.chameleonBoostGold || 0;
+      const boostSpent = p.infiltratorBoostGold ?? p.chameleonBoostGold ?? 0;
       return {
         ...p,
         role: chosenFoxIndices.has(idx) ? 'fox' : 'innocent',
@@ -568,6 +580,7 @@ export default function App() {
         isReady: false,
         score: keepScores ? p.score : 0,
         gold: Math.max(0, (p.gold ?? 0) - boostSpent),
+        infiltratorBoostGold: 0,
         chameleonBoostGold: 0,
       };
     });
@@ -580,7 +593,7 @@ export default function App() {
     setSelectedVoteTargetId(null);
     setSelectedGuessWord(null);
     setRoundResolution(null);
-    setCaughtChameleonId(null);
+    setCaughtInfiltratorId(null);
     setIsFoxGuessModalOpen(false);
     setIsResolutionModalOpen(false);
     setHasUsedPotionThisTurn(false);
@@ -629,7 +642,7 @@ export default function App() {
         processBotClues(updatedPlayers, 3500, coord, chosenCat);
       }
     }
-  }, [selectedCategoryId, players, gameMode, settings.chameleonCount, settings.categoryDeckMode, settings.categoryPool, roomId, broadcastState, isHost]);
+  }, [selectedCategoryId, players, gameMode, settings.infiltratorCount, settings.chameleonCount, settings.categoryDeckMode, settings.categoryPool, roomId, broadcastState, isHost]);
 
   // Handle Player Management in Lobby
   const handleAddBot = () => {
@@ -936,6 +949,7 @@ export default function App() {
     setPlayers(finalWithForgedClues);
     setGamePhase('voting');
     gamePhaseRef.current = 'voting';
+    sound.voteStart();
     setSelectedVoteTargetId(null);
 
     if (gameMode === 'pass_and_play') {
@@ -1157,11 +1171,11 @@ export default function App() {
     return () => timeouts.forEach((t) => clearTimeout(t));
   }, [gamePhase, silencedPlayerIds, players]);
 
-  // Calculate Chameleon drawing odds for active player
-  const myChameleonOdds = React.useMemo(() => {
-    const list = players.map((p) => 1 + Math.floor((p.chameleonBoostGold || 0) / 50));
+  // Calculate Infiltrator drawing odds for active player
+  const myInfiltratorOdds = React.useMemo(() => {
+    const list = players.map((p) => 1 + Math.floor((p.infiltratorBoostGold ?? p.chameleonBoostGold ?? 0) / 50));
     const total = list.reduce((a, b) => a + b, 0);
-    const myTickets = 1 + Math.floor((activePlayer.chameleonBoostGold || 0) / 50);
+    const myTickets = 1 + Math.floor((activePlayer.infiltratorBoostGold ?? activePlayer.chameleonBoostGold ?? 0) / 50);
     return total > 0 ? (myTickets / total) * 100 : 0;
   }, [players, activePlayer]);
 
@@ -1171,6 +1185,7 @@ export default function App() {
     if (!votedPlayers.every((p) => Boolean(p.votedForId))) {
       return;
     }
+    sound.voteEnd();
     const tally: Record<string, number> = {};
     votedPlayers.forEach((p) => {
       if (p.votedForId) {
@@ -1211,11 +1226,11 @@ export default function App() {
     if (foxWasCaught) {
       sound.caught();
       const targetFox = caughtFox || actualFox;
-      setCaughtChameleonId(targetFox.id);
+      setCaughtInfiltratorId(targetFox.id);
       setGamePhase('fox_guess');
 
       if (gameMode === 'pass_and_play') {
-        // Specifically switch pass-and-play turn to the caught Chameleon
+        // Specifically switch pass-and-play turn to the caught Infiltrator
         const chamIdx = votedPlayers.findIndex((p) => p.id === targetFox.id);
         if (chamIdx !== -1) {
           setPassAndPlayIndex(chamIdx);
@@ -1232,7 +1247,7 @@ export default function App() {
         broadcastState('fox_guess', votedPlayers);
       }
 
-      // CRITICAL: Only open the interactive guess modal for the ACTUAL caught chameleon if human!
+      // CRITICAL: Only open the interactive guess modal for the ACTUAL caught infiltrator if human!
       // Regular innocent players are NEVER given the task of guessing the word!
       if (targetFox.id === myPlayerId && targetFox.isHuman) {
         setIsFoxGuessModalOpen(true);
@@ -1258,7 +1273,7 @@ export default function App() {
     } else {
       // Fox escaped undetected! Innocents voted for someone else or tied
       sound.victory();
-      setCaughtChameleonId(null);
+      setCaughtInfiltratorId(null);
       resolveRound(false, undefined, votedPlayers, tally, accusedPlayer, actualFox);
     }
   };
@@ -1270,7 +1285,7 @@ export default function App() {
     setIsFoxGuessModalOpen(false);
 
     const actualFox =
-      players.find((p) => p.id === (caughtChameleonId || foxPlayerId)) ||
+      players.find((p) => p.id === (caughtInfiltratorId || foxPlayerId)) ||
       players.find((p) => p.role === 'fox') ||
       players[0];
     const accusedPlayer = actualFox; // Fox was accused
@@ -1298,8 +1313,8 @@ export default function App() {
     let reason: 'innocents_caught_fox' | 'fox_stole_win' | 'fox_escaped_undetected';
 
     const innocentCatchPts = settings.innocentCatchPoints || 2;
-    const chameleonStealPts = settings.chameleonStealPoints || 1;
-    const chameleonEscapePts = settings.chameleonEscapePoints || 2;
+    const infiltratorStealPts = settings.infiltratorStealPoints ?? settings.chameleonStealPoints ?? 1;
+    const infiltratorEscapePts = settings.infiltratorEscapePoints ?? settings.chameleonEscapePoints ?? 2;
 
     if (foxWasCaught) {
       const isGuessCorrect =
@@ -1310,8 +1325,8 @@ export default function App() {
         winner = 'fox';
         reason = 'fox_stole_win';
         pointsAwarded[actualFox.id] = {
-          points: chameleonStealPts,
-          explanation: `Caught, but correctly guessed the secret word (+${chameleonStealPts} pts)!`,
+          points: infiltratorStealPts,
+          explanation: `Caught, but correctly guessed the secret word (+${infiltratorStealPts} pts)!`,
         };
       } else {
         // Innocents win
@@ -1335,8 +1350,8 @@ export default function App() {
       winner = 'fox';
       reason = 'fox_escaped_undetected';
       pointsAwarded[actualFox.id] = {
-        points: chameleonEscapePts,
-        explanation: `Escaped undetected by blending in (+${chameleonEscapePts} pts)!`,
+        points: infiltratorEscapePts,
+        explanation: `Escaped undetected by blending in (+${infiltratorEscapePts} pts)!`,
       };
     }
 
@@ -1401,6 +1416,12 @@ export default function App() {
 
   // Robust player removal: cleans up clues, votes, active effects, and immediately advances game phase if needed
   const handleRemovePlayer = (id: string) => {
+    // Only host can kick other players in multiplayer room mode
+    if (gameMode === 'room' && !isHost && id !== myPlayerId) {
+      console.warn('Only the host can kick players');
+      return;
+    }
+
     sound.click();
 
     // 1. Filter out the removed player, and reset any votes that targeted this player
@@ -1484,7 +1505,7 @@ export default function App() {
 
     // 7. Fox guess phase:
     if (gamePhase === 'fox_guess') {
-      if (caughtChameleonId === id) {
+      if (caughtInfiltratorId === id) {
         setIsFoxGuessModalOpen(false);
         const actualFox = nextPlayers.find((p) => p.role === 'fox') || nextPlayers[0];
         resolveRound(false, undefined, nextPlayers, {}, null, actualFox);
@@ -1494,6 +1515,12 @@ export default function App() {
 
   // Next round trigger from resolution
   const handleNextRound = () => {
+    // Only host can start next round in multiplayer rooms
+    if (gameMode === 'room' && !isHost) {
+      console.warn('Only the room host can start the next round');
+      return;
+    }
+
     setIsResolutionModalOpen(false);
     if (roundNumber % 3 === 0 && settings.itemsEnabled !== false) {
       setGamePhase('shop');
@@ -1533,6 +1560,10 @@ export default function App() {
 
   // Exit Shop and transition to next round (roundNumber + 1)
   const handleExitShop = () => {
+    if (gameMode === 'room' && !isHost) {
+      console.warn('Only the room host can exit shop and start next round');
+      return;
+    }
     sound.click();
     setRoundNumber((r) => r + 1);
     startNewRound(true);
@@ -1829,15 +1860,17 @@ export default function App() {
     }
   };
 
-  // Handle gold investment to boost Chameleon odds
-  const handleUpdateChameleonBoost = (playerId: string, goldAmount: number) => {
+  // Handle gold investment to boost Infiltrator odds
+  const handleUpdateInfiltratorBoost = (playerId: string, goldAmount: number) => {
     sound.coin();
+    const val = Math.max(0, goldAmount);
     setPlayers((prev) =>
       prev.map((p) => {
         if (p.id === playerId) {
           return {
             ...p,
-            chameleonBoostGold: Math.max(0, goldAmount),
+            infiltratorBoostGold: val,
+            chameleonBoostGold: val,
           };
         }
         return p;
@@ -1846,7 +1879,11 @@ export default function App() {
 
     if (gameMode === 'room' && roomId) {
       socketClient.syncState(roomId, {
-        players: players.map((p) => (p.id === playerId ? { ...p, chameleonBoostGold: goldAmount } : p)),
+        players: players.map((p) =>
+          p.id === playerId
+            ? { ...p, infiltratorBoostGold: val, chameleonBoostGold: val }
+            : p
+        ),
       });
     }
   };
@@ -2031,7 +2068,7 @@ export default function App() {
     setRoundResolution(null);
     setIsResolutionModalOpen(false);
     setIsFoxGuessModalOpen(false);
-    setCaughtChameleonId(null);
+    setCaughtInfiltratorId(null);
     setSecretCoordinate(null);
     secretCoordinateRef.current = null;
     setFoxPlayerId('');
@@ -2045,6 +2082,10 @@ export default function App() {
 
   // Kick player handler for host
   const handleKickPlayer = async (targetPlayerId: string) => {
+    if (gameMode === 'room' && !isHost) {
+      console.warn('Only the host can kick players');
+      return;
+    }
     sound.click();
     const updated = players.filter((p) => p.id !== targetPlayerId);
     setPlayers(updated);
@@ -2057,12 +2098,12 @@ export default function App() {
   };
 
   const actualFoxPlayer =
-    players.find((p) => p.id === (caughtChameleonId || foxPlayerId)) ||
+    players.find((p) => p.id === (caughtInfiltratorId || foxPlayerId)) ||
     players.find((p) => p.role === 'fox') ||
     null;
   const isCurrentPlayerTheCaughtFox =
     activePlayer.role === 'fox' &&
-    (caughtChameleonId ? activePlayer.id === caughtChameleonId : activePlayer.id === foxPlayerId);
+    (caughtInfiltratorId ? activePlayer.id === caughtInfiltratorId : activePlayer.id === foxPlayerId);
 
   return (
     <div className="min-h-screen bg-dark-pattern flex flex-col selection:bg-emerald-500 selection:text-slate-950 pb-8 text-slate-100">
@@ -2083,9 +2124,9 @@ export default function App() {
         isHost={isHost}
         myPlayerId={myPlayerId}
         onKickPlayer={handleKickPlayer}
-        onOpenOddsBooster={() => setIsChameleonBoosterModalOpen(true)}
-        myChameleonOdds={myChameleonOdds}
-        myChameleonBoostGold={activePlayer.chameleonBoostGold}
+        onOpenOddsBooster={() => setIsInfiltratorBoosterModalOpen(true)}
+        myInfiltratorOdds={myInfiltratorOdds}
+        myInfiltratorBoostGold={activePlayer.infiltratorBoostGold ?? activePlayer.chameleonBoostGold}
       />
 
       {/* Main Container */}
@@ -2143,8 +2184,8 @@ export default function App() {
                 roomId={roomId}
                 onLeaveRoom={handleLeaveRoom}
                 isHost={isHost}
-                onOpenOddsBooster={() => setIsChameleonBoosterModalOpen(true)}
-                onUpdateChameleonBoost={handleUpdateChameleonBoost}
+                onOpenOddsBooster={() => setIsInfiltratorBoosterModalOpen(true)}
+                onUpdateInfiltratorBoost={handleUpdateInfiltratorBoost}
               />
             </motion.div>
           ) : (
@@ -2182,7 +2223,7 @@ export default function App() {
                     pendingClueForged={pendingClueForged}
                     forgedTargetPlayerId={forgedTargetPlayerId}
                     silencedPlayerIds={silencedPlayerIds}
-                    onOpenOddsBooster={() => setIsChameleonBoosterModalOpen(true)}
+                    onOpenOddsBooster={() => setIsInfiltratorBoosterModalOpen(true)}
                     itemsEnabled={settings.itemsEnabled !== false}
                     isHost={isHost}
                     onKickPlayer={handleRemovePlayer}
@@ -2235,6 +2276,8 @@ export default function App() {
                 onNextRound={handleNextRound}
                 onOpenResolutionModal={() => setIsResolutionModalOpen(true)}
                 roundNumber={roundNumber}
+                isHost={isHost}
+                gameMode={gameMode}
               />
             </motion.div>
           )}
@@ -2255,8 +2298,8 @@ export default function App() {
         onClose={() => setIsRulesOpen(false)}
       />
 
-      {/* CHAMELEON GUESS MODAL (Exclusively shown to the caught Chameleon for their escape guess) */}
-      <ChameleonGuessModal
+      {/* INFILTRATOR GUESS MODAL (Exclusively shown to the caught Infiltrator for their escape guess) */}
+      <InfiltratorGuessModal
         isOpen={isFoxGuessModalOpen && isCurrentPlayerTheCaughtFox}
         category={category}
         foxPlayerName={actualFoxPlayer?.name || 'The Infiltrator'}
@@ -2267,7 +2310,7 @@ export default function App() {
         onSubmitGuess={handleSubmitFoxGuess}
       />
 
-      {/* ROUND RESOLUTION MODAL (With smooth spring fade & slide animations) */}
+      {/* ROUND RESOLUTION MODAL (With celebratory particles & host-only controls) */}
       <RoundResolutionModal
         isOpen={isResolutionModalOpen}
         roundResolution={roundResolution}
@@ -2276,6 +2319,8 @@ export default function App() {
         onClose={() => setIsResolutionModalOpen(false)}
         roundNumber={roundNumber}
         targetScore={settings.targetScore}
+        isHost={isHost}
+        gameMode={gameMode}
       />
 
       {/* THE MYSTIC SHOP MODAL (Triggers every 3 rounds) */}
@@ -2285,16 +2330,18 @@ export default function App() {
         onBuyPotion={handleBuyPotion}
         onNextRound={handleExitShop}
         roundNumber={roundNumber}
+        isHost={isHost}
+        gameMode={gameMode}
       />
 
-      {/* CHAMELEON ORACLE SERUM PROMPT MODAL */}
+      {/* INFILTRATOR ORACLE SERUM PROMPT MODAL */}
       <OracleSerumModal
         isOpen={isOracleModalOpen}
         onClose={() => setIsOracleModalOpen(false)}
         onSelectChoice={handleSelectOracleChoice}
       />
 
-      {/* CHAMELEON INK OF DECEIT / CLUE FORGERY MODAL */}
+      {/* INFILTRATOR INK OF DECEIT / CLUE FORGERY MODAL */}
       <ClueForgeryModal
         isOpen={isClueForgeryModalOpen}
         players={players}
@@ -2311,7 +2358,7 @@ export default function App() {
         gamePhase={gamePhase}
       />
 
-      {/* CHAMELEON SILENCE POTION MODAL */}
+      {/* SILENCE POTION MODAL */}
       <SilencePotionModal
         isOpen={isSilenceModalOpen}
         players={players}
@@ -2320,13 +2367,13 @@ export default function App() {
         onClose={() => setIsSilenceModalOpen(false)}
       />
 
-      {/* CHAMELEON ODDS BOOSTER MODAL (Spend gold to boost role chances) */}
-      <ChameleonBoosterModal
-        isOpen={isChameleonBoosterModalOpen}
+      {/* INFILTRATOR ODDS BOOSTER MODAL (Spend gold to boost role chances) */}
+      <InfiltratorBoosterModal
+        isOpen={isInfiltratorBoosterModalOpen}
         player={activePlayer}
         allPlayers={players}
-        onUpdateBoost={handleUpdateChameleonBoost}
-        onClose={() => setIsChameleonBoosterModalOpen(false)}
+        onUpdateBoost={handleUpdateInfiltratorBoost}
+        onClose={() => setIsInfiltratorBoosterModalOpen(false)}
       />
 
       {/* CREATOR FOOTER REFERENCE */}

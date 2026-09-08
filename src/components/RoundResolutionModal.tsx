@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Award, ArrowRight, Eye, RefreshCw, X, ShieldAlert, CheckCircle2, Sparkles } from 'lucide-react';
+import { Trophy, Award, ArrowRight, Eye, RefreshCw, X, ShieldAlert, CheckCircle2, Sparkles, Flame } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Player, RoundResolution } from '../types';
+import { sound } from '../utils/sound';
 
 interface RoundResolutionModalProps {
   isOpen: boolean;
@@ -12,6 +13,8 @@ interface RoundResolutionModalProps {
   onClose?: () => void;
   roundNumber?: number;
   targetScore?: number;
+  isHost?: boolean;
+  gameMode?: string;
 }
 
 export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
@@ -22,21 +25,26 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
   onClose,
   roundNumber,
   targetScore = 5,
+  isHost = true,
+  gameMode = 'solo',
 }) => {
   if (!roundResolution) return null;
 
   const isInnocentWin = roundResolution.winner === 'innocents';
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
-  // Trigger celebration confetti & particle animation based on who won
+  // Trigger celebration confetti, particle animation, & fanfare audio based on winner
   useEffect(() => {
     if (!isOpen || !roundResolution) return;
 
     if (isInnocentWin) {
+      // Audio Fanfare
+      sound.celebrateInnocents();
+
       // --- INNOCENTS CELEBRATION (Emerald, Gold, Cyan, Silver) ---
       confetti({
-        particleCount: 55,
-        spread: 80,
+        particleCount: 65,
+        spread: 90,
         origin: { y: 0.6 },
         colors: ['#10b981', '#34d399', '#f59e0b', '#fbbf24', '#38bdf8', '#ffffff'],
         disableForReducedMotion: true,
@@ -44,18 +52,18 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
 
       const timer1 = setTimeout(() => {
         confetti({
-          particleCount: 45,
+          particleCount: 50,
           angle: 60,
-          spread: 60,
-          origin: { x: 0.1, y: 0.7 },
+          spread: 65,
+          origin: { x: 0.08, y: 0.72 },
           colors: ['#10b981', '#34d399', '#6ee7b7', '#f59e0b', '#38bdf8'],
           disableForReducedMotion: true,
         });
         confetti({
-          particleCount: 45,
+          particleCount: 50,
           angle: 120,
-          spread: 60,
-          origin: { x: 0.9, y: 0.7 },
+          spread: 65,
+          origin: { x: 0.92, y: 0.72 },
           colors: ['#10b981', '#34d399', '#6ee7b7', '#f59e0b', '#38bdf8'],
           disableForReducedMotion: true,
         });
@@ -63,10 +71,10 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
 
       const timer2 = setTimeout(() => {
         confetti({
-          particleCount: 35,
-          spread: 110,
-          origin: { y: 0.42 },
-          colors: ['#34d399', '#fbbf24', '#ffffff', '#10b981'],
+          particleCount: 45,
+          spread: 120,
+          origin: { y: 0.38 },
+          colors: ['#34d399', '#fbbf24', '#ffffff', '#10b981', '#67e8f9'],
           shapes: ['circle', 'square'],
           disableForReducedMotion: true,
         });
@@ -77,10 +85,13 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
         clearTimeout(timer2);
       };
     } else {
+      // Audio Stealth Victory
+      sound.celebrateInfiltrator();
+
       // --- INFILTRATOR CELEBRATION (Crimson, Violet, Amber, Neon Rose) ---
       confetti({
-        particleCount: 60,
-        spread: 80,
+        particleCount: 70,
+        spread: 90,
         origin: { y: 0.6 },
         colors: ['#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#fbbf24', '#dc2626'],
         disableForReducedMotion: true,
@@ -88,18 +99,18 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
 
       const timer1 = setTimeout(() => {
         confetti({
-          particleCount: 45,
+          particleCount: 50,
           angle: 50,
-          spread: 65,
-          origin: { x: 0.12, y: 0.68 },
+          spread: 70,
+          origin: { x: 0.1, y: 0.7 },
           colors: ['#f59e0b', '#ef4444', '#8b5cf6', '#dc2626', '#f43f5e'],
           disableForReducedMotion: true,
         });
         confetti({
-          particleCount: 45,
+          particleCount: 50,
           angle: 130,
-          spread: 65,
-          origin: { x: 0.88, y: 0.68 },
+          spread: 70,
+          origin: { x: 0.9, y: 0.7 },
           colors: ['#f59e0b', '#ef4444', '#8b5cf6', '#dc2626', '#f43f5e'],
           disableForReducedMotion: true,
         });
@@ -107,10 +118,10 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
 
       const timer2 = setTimeout(() => {
         confetti({
-          particleCount: 40,
-          spread: 100,
-          origin: { y: 0.4 },
-          colors: ['#a855f7', '#fbbf24', '#f43f5e', '#ef4444', '#e11d48'],
+          particleCount: 50,
+          spread: 110,
+          origin: { y: 0.38 },
+          colors: ['#a855f7', '#fbbf24', '#f43f5e', '#ef4444', '#e11d48', '#7c3aed'],
           shapes: ['circle', 'square'],
           disableForReducedMotion: true,
         });
@@ -123,15 +134,15 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
     }
   }, [isOpen, roundResolution, isInnocentWin]);
 
-  // Ambient floating background particles configuration
+  // Ambient floating background particles configuration (Emerald/Gold vs Crimson/Purple)
   const ambientParticles = React.useMemo(() => {
-    return Array.from({ length: 18 }).map((_, i) => ({
+    return Array.from({ length: 22 }).map((_, i) => ({
       id: i,
-      x: (i * 17 + 7) % 95,
-      y: (i * 23 + 11) % 90,
+      x: (i * 15 + 6) % 94,
+      y: (i * 21 + 9) % 88,
       size: (i % 3) + 3,
-      duration: 3 + (i % 4) * 1.5,
-      delay: (i % 6) * 0.4,
+      duration: 3.5 + (i % 4) * 1.2,
+      delay: (i % 6) * 0.35,
     }));
   }, []);
 
@@ -163,38 +174,62 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
           >
             {/* Ambient Animated Victory Sparks & Floating Particles */}
             <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-              {ambientParticles.map((pt) => (
-                <motion.div
-                  key={pt.id}
-                  className={`absolute rounded-full opacity-60 ${
-                    isInnocentWin
-                      ? pt.id % 2 === 0
-                        ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
-                        : 'bg-amber-300 shadow-[0_0_8px_#fcd34d]'
-                      : pt.id % 2 === 0
-                      ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
-                      : 'bg-purple-400 shadow-[0_0_8px_#c084fc]'
-                  }`}
-                  style={{
-                    left: `${pt.x}%`,
-                    top: `${pt.y}%`,
-                    width: `${pt.size}px`,
-                    height: `${pt.size}px`,
-                  }}
-                  animate={{
-                    y: [0, -40, -80],
-                    x: [0, (pt.id % 2 === 0 ? 1 : -1) * 12, 0],
-                    opacity: [0.1, 0.75, 0],
-                    scale: [0.8, 1.4, 0.4],
-                  }}
-                  transition={{
-                    duration: pt.duration,
-                    repeat: Infinity,
-                    delay: pt.delay,
-                    ease: 'easeInOut',
-                  }}
-                />
-              ))}
+              {ambientParticles.map((pt) => {
+                const isSpecial = pt.id % 4 === 0;
+                return (
+                  <motion.div
+                    key={pt.id}
+                    className={`absolute flex items-center justify-center ${
+                      isInnocentWin
+                        ? pt.id % 2 === 0
+                          ? 'text-emerald-400 drop-shadow-[0_0_8px_#34d399]'
+                          : 'text-amber-300 drop-shadow-[0_0_8px_#fcd34d]'
+                        : pt.id % 2 === 0
+                        ? 'text-rose-500 drop-shadow-[0_0_8px_#f43f5e]'
+                        : 'text-purple-400 drop-shadow-[0_0_8px_#c084fc]'
+                    }`}
+                    style={{
+                      left: `${pt.x}%`,
+                      top: `${pt.y}%`,
+                      width: `${pt.size * (isSpecial ? 2.6 : 1)}px`,
+                      height: `${pt.size * (isSpecial ? 2.6 : 1)}px`,
+                    }}
+                    animate={{
+                      y: [0, -50, -110],
+                      x: [0, (pt.id % 2 === 0 ? 1 : -1) * 16, 0],
+                      opacity: [0, 0.85, 0],
+                      scale: [0.6, 1.3, 0.3],
+                      rotate: isSpecial ? [0, 180, 360] : 0,
+                    }}
+                    transition={{
+                      duration: pt.duration,
+                      repeat: Infinity,
+                      delay: pt.delay,
+                      ease: 'easeInOut',
+                    }}
+                  >
+                    {isSpecial ? (
+                      isInnocentWin ? (
+                        <Sparkles className="w-full h-full" />
+                      ) : (
+                        <Flame className="w-full h-full" />
+                      )
+                    ) : (
+                      <div
+                        className={`w-full h-full rounded-full ${
+                          isInnocentWin
+                            ? pt.id % 2 === 0
+                              ? 'bg-emerald-400'
+                              : 'bg-amber-300'
+                            : pt.id % 2 === 0
+                            ? 'bg-rose-500'
+                            : 'bg-purple-400'
+                        }`}
+                      />
+                    )}
+                  </motion.div>
+                );
+              })}
             </div>
 
             {/* Top Close / Inspect Button */}
@@ -371,10 +406,15 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
                 </button>
               )}
 
-              {roundNumber && roundNumber % 3 === 0 ? (
+              {gameMode === 'room' && !isHost ? (
+                <div className="w-full flex-1 py-2.5 px-4 rounded-xl bg-slate-900/90 border border-slate-700 text-center flex items-center justify-center gap-2.5 text-slate-300 font-display text-xs sm:text-sm font-bold shadow-inner">
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                  <span className="text-amber-300">Waiting for Host to start the next round...</span>
+                </div>
+              ) : roundNumber && roundNumber % 3 === 0 ? (
                 <button
                   onClick={onNextRound}
-                  className="w-full flex-1 retro-button px-6 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-transform border-amber-300"
+                  className="w-full flex-1 retro-button px-6 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-transform border-amber-300 active:scale-95"
                 >
                   <span>Proceed to Shop 🛒</span>
                   <ArrowRight className="w-4 h-4 text-slate-950" />
@@ -382,7 +422,7 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
               ) : (
                 <button
                   onClick={onNextRound}
-                  className="w-full flex-1 retro-button px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-transform"
+                  className="w-full flex-1 retro-button px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-transform active:scale-95"
                 >
                   <span>Proceed to Next Round</span>
                   <ArrowRight className="w-4 h-4 text-slate-950" />

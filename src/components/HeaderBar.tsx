@@ -20,6 +20,8 @@ interface HeaderBarProps {
   myPlayerId?: string;
   onKickPlayer?: (playerId: string) => void;
   onOpenOddsBooster?: () => void;
+  myInfiltratorOdds?: number;
+  myInfiltratorBoostGold?: number;
   myChameleonOdds?: number;
   myChameleonBoostGold?: number;
 }
@@ -41,9 +43,13 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   myPlayerId,
   onKickPlayer,
   onOpenOddsBooster,
+  myInfiltratorOdds,
+  myInfiltratorBoostGold,
   myChameleonOdds,
   myChameleonBoostGold,
 }) => {
+  const displayOdds = myInfiltratorOdds ?? myChameleonOdds;
+  const displayBoostGold = myInfiltratorBoostGold ?? myChameleonBoostGold;
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isRoomListOpen, setIsRoomListOpen] = useState(false);
@@ -362,11 +368,11 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               <span className="text-sm select-none">🕵️</span>
               <span className="hidden sm:inline">Odds:</span>
               <span className="text-yellow-300">
-                {myChameleonOdds !== undefined ? `${myChameleonOdds.toFixed(1)}%` : 'Odds'}
+                {displayOdds !== undefined ? `${displayOdds.toFixed(1)}%` : 'Odds'}
               </span>
-              {myChameleonBoostGold && myChameleonBoostGold > 0 ? (
+              {displayBoostGold && displayBoostGold > 0 ? (
                 <span className="text-[10px] bg-amber-400 text-slate-950 px-1 rounded font-black">
-                  +{Math.floor(myChameleonBoostGold / 50)} 🎟️
+                  +{Math.floor(displayBoostGold / 50)} 🎟️
                 </span>
               ) : null}
             </button>

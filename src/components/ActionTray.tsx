@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, CheckCircle2, AlertOctagon, RotateCcw, Trophy, Sparkles, Clock, ArrowRight, Eye, Edit3, X, MessageSquare, VolumeX, Lock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, CheckCircle2, AlertOctagon, RotateCcw, Trophy, Sparkles, Clock, ArrowRight, Eye, Edit3, X, MessageSquare, VolumeX, Lock, ChevronDown, ChevronUp, Target } from 'lucide-react';
 import { Player, GamePhase, RoundResolution, GameSettings, DiscussionMessage } from '../types';
+import { sound } from '../utils/sound';
 
 interface ActionTrayProps {
   gamePhase: GamePhase;
@@ -35,6 +36,8 @@ interface ActionTrayProps {
   onNextRound: () => void;
   onOpenResolutionModal?: () => void;
   roundNumber?: number;
+  isHost?: boolean;
+  gameMode?: string;
 }
 
 export const ActionTray: React.FC<ActionTrayProps> = ({
@@ -64,6 +67,8 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
   onNextRound,
   onOpenResolutionModal,
   roundNumber,
+  isHost = true,
+  gameMode = 'solo',
 }) => {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [discussionInput, setDiscussionInput] = React.useState('');
@@ -489,28 +494,38 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                   const isMyVotedTarget = activePlayer.votedForId === p.id;
                   const isTargetSilenced = silencedPlayerIds.includes(p.id);
                   return (
-                    <button
+                    <motion.button
                       key={p.id}
+                      type="button"
                       disabled={allVotesSubmitted}
-                      onClick={() => onSelectVoteTarget(p.id)}
-                      className={`p-2.5 rounded-lg border-2 text-left transition-all flex items-center gap-2 ${
+                      whileHover={!allVotesSubmitted ? { scale: 1.03 } : undefined}
+                      whileTap={!allVotesSubmitted ? { scale: 0.96 } : undefined}
+                      onClick={() => {
+                        onSelectVoteTarget(p.id);
+                        sound.click();
+                      }}
+                      className={`relative p-2.5 rounded-lg border-2 text-left transition-all flex items-center gap-2 ${
                         isMyVotedTarget
-                          ? 'bg-purple-900 border-purple-400 text-white shadow-md scale-[1.02] ring-2 ring-purple-300'
+                          ? 'bg-purple-900 border-purple-400 text-white shadow-md ring-2 ring-purple-300'
                           : isSelected
-                          ? 'bg-rose-600 border-rose-400 text-white shadow-md scale-[1.02]'
+                          ? 'bg-rose-600 border-rose-400 text-white shadow-md'
                           : 'bg-slate-800 hover:bg-slate-700/80 border-slate-700 text-white shadow-xs'
                       } ${allVotesSubmitted ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                     >
                       <span className="text-xl shrink-0">{p.avatar}</span>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1 flex-wrap">
                           <span className="font-bold text-xs truncate leading-tight">
                             {p.name}
                           </span>
                           {isMyVotedTarget && (
-                            <span className="text-[9px] bg-purple-950 text-yellow-300 font-bold px-1 rounded">
+                            <motion.span
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="text-[9px] bg-purple-950 text-yellow-300 font-bold px-1 rounded flex items-center gap-0.5"
+                            >
                               ✓ Voted
-                            </span>
+                            </motion.span>
                           )}
                           {isTargetSilenced && (
                             <span className="text-[9px] bg-rose-950 text-rose-300 border border-rose-600 font-bold px-1 rounded flex items-center gap-0.5" title="Muted by Infiltrator">
@@ -531,7 +546,18 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                           {p.clue ? `"${p.clue}"` : <span className="text-slate-500 italic font-sans font-normal text-[10px]">No clue</span>}
                         </div>
                       </div>
-                    </button>
+
+                      {/* Animated Target Crosshair badge if selected */}
+                      {isSelected && !isMyVotedTarget && (
+                        <motion.div
+                          initial={{ scale: 0, rotate: -45 }}
+                          animate={{ scale: 1, rotate: 0 }}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 rounded-full border-2 border-white flex items-center justify-center shadow-md"
+                        >
+                          <Target className="w-3 h-3 text-white" />
+                        </motion.div>
+                      )}
+                    </motion.button>
                   );
                 })}
             </div>
@@ -541,7 +567,8 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
               <div className="flex items-center justify-between gap-3 pt-1">
                 <div className="text-xs text-slate-300">
                   {selectedVoteTargetId && selectedVoteTargetId !== activePlayer.votedForId ? (
-                    <span>
+                    <span className="flex items-center gap-1.5">
+                      <Target className="w-3.5 h-3.5 text-rose-400" />
                       Target selected:{' '}
                       <strong className="text-rose-400 font-bold">
                         {players.find((p) => p.id === selectedVoteTargetId)?.name}
@@ -558,8 +585,11 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                   {hasCurrentPlayerVoted ? (
                     selectedVoteTargetId && selectedVoteTargetId !== activePlayer.votedForId ? (
                       <button
-                        onClick={onSubmitVote}
-                        className="retro-button px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 shadow-md cursor-pointer"
+                        onClick={() => {
+                          onSubmitVote();
+                          sound.voteCast();
+                        }}
+                        className="retro-button px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 shadow-md cursor-pointer active:scale-95 transition-transform"
                       >
                         <AlertOctagon className="w-4 h-4" />
                         <span>Update Vote Accusation</span>
@@ -567,9 +597,12 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                     ) : null
                   ) : (
                     <button
-                      onClick={onSubmitVote}
+                      onClick={() => {
+                        onSubmitVote();
+                        sound.voteCast();
+                      }}
                       disabled={!selectedVoteTargetId}
-                      className="retro-button px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50 disabled:pointer-events-none rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 shadow-md cursor-pointer"
+                      className="retro-button px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50 disabled:pointer-events-none rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 shadow-md cursor-pointer active:scale-95 transition-transform"
                     >
                       <AlertOctagon className="w-4 h-4" />
                       <span>Cast Vote Accusation</span>
@@ -695,10 +728,15 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                   </button>
                 )}
 
-                {roundNumber && roundNumber % 3 === 0 && settings.itemsEnabled !== false ? (
+                {gameMode === 'room' && !isHost ? (
+                  <div className="px-3.5 py-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg font-display text-xs text-amber-300 flex items-center gap-2 font-bold shadow-inner">
+                    <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+                    <span>Waiting for Host...</span>
+                  </div>
+                ) : roundNumber && roundNumber % 3 === 0 && settings.itemsEnabled !== false ? (
                   <button
                     onClick={onNextRound}
-                    className="retro-button px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md border-amber-300"
+                    className="retro-button px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md border-amber-300 active:scale-95 transition-transform"
                   >
                     <span>Proceed to Shop 🛒</span>
                     <ArrowRight className="w-4 h-4" />
@@ -706,7 +744,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                 ) : (
                   <button
                     onClick={onNextRound}
-                    className="retro-button px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md"
+                    className="retro-button px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md active:scale-95 transition-transform"
                   >
                     <span>Next Round</span>
                     <ArrowRight className="w-4 h-4" />

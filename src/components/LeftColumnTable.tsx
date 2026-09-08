@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Clock, Bot, User, HelpCircle, Shield, Sparkles, ArrowUpDown, Layers, ArrowUp, ArrowDown, Package, UserX } from 'lucide-react';
+import { Check, Clock, Bot, User, HelpCircle, Shield, Sparkles, ArrowUpDown, Layers, ArrowUp, ArrowDown, Package, UserX, Wand2 } from 'lucide-react';
 import { Player, GamePhase, PlayerInventory } from '../types';
 import { POTION_CATALOG } from '../data/potions';
+import { sound } from '../utils/sound';
 
 export type InventorySortOption = 'default' | 'type' | 'quantity_desc' | 'quantity_asc';
 
@@ -57,7 +58,7 @@ interface LeftColumnTableProps {
   onOpenOddsBooster?: () => void;
   recentlyUsedPotionPlayerId?: string | null;
   recentlyUsedPotionId?: string | null;
-  activePotionToast?: { message: string; icon: string; style: 'sky' | 'cyan' | 'purple' | 'amber'; isChameleonOnly?: boolean } | null;
+  activePotionToast?: { message: string; icon: string; style: 'sky' | 'cyan' | 'purple' | 'amber'; isInfiltratorOnly?: boolean; isChameleonOnly?: boolean } | null;
   inventory?: PlayerInventory;
   gold?: number;
   pendingClueForged?: { targetPlayerId: string; newClue: string } | null;
@@ -99,6 +100,14 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
 
   // Sorting state for collected potions: 'default' | 'type' | 'quantity_desc' | 'quantity_asc'
   const [inventorySort, setInventorySort] = useState<InventorySortOption>('default');
+  const [animatingPotionId, setAnimatingPotionId] = useState<string | null>(null);
+
+  const handleUsePotionWithAnimation = (potionId: string) => {
+    sound.potionUse(potionId);
+    setAnimatingPotionId(potionId);
+    setTimeout(() => setAnimatingPotionId(null), 1200);
+    onUsePotion?.(potionId);
+  };
 
   // During clue submission:
   // - Innocents see ONLY their own clue
@@ -244,7 +253,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
       </div>
 
       {/* Active Potion Toast Banner */}
-      {activePotionToast && (!activePotionToast.isChameleonOnly || isImpostor) && (
+      {activePotionToast && (!activePotionToast.isInfiltratorOnly && !activePotionToast.isChameleonOnly || isImpostor) && (
         <div
           className={`mb-3 p-2.5 rounded-lg border flex items-center justify-between text-xs font-mono font-bold shadow-md transition-all ${
             activePotionToast.style === 'sky'
@@ -260,7 +269,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
             <span className="text-base select-none">{activePotionToast.icon}</span>
             <span>{activePotionToast.message}</span>
           </div>
-          {activePotionToast.isChameleonOnly ? (
+          {activePotionToast.isInfiltratorOnly || activePotionToast.isChameleonOnly ? (
             <span className="text-[10px] font-sans font-extrabold uppercase tracking-wider bg-purple-900 text-purple-300 border border-purple-400 px-1.5 py-0.5 rounded">
               Sneaky
             </span>
@@ -405,18 +414,21 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                         </div>
                       </div>
 
-                      <button
+                      <motion.button
                         disabled={hasUsedPotionThisTurn}
-                        onClick={() => onUsePotion?.(potion.id)}
+                        whileTap={!hasUsedPotionThisTurn ? { scale: 0.92 } : undefined}
+                        onClick={() => handleUsePotionWithAnimation(potion.id)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-display font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
-                          hasUsedPotionThisTurn
+                          animatingPotionId === potion.id
+                            ? 'bg-purple-400 text-slate-950 ring-4 ring-purple-300 animate-pulse'
+                            : hasUsedPotionThisTurn
                             ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-50'
                             : 'retro-button bg-purple-600 hover:bg-purple-500 active:scale-95 text-white border-purple-400 shadow-sm'
                         }`}
                         title={hasUsedPotionThisTurn ? 'Already used 1 potion this turn' : `Use ${potion.name}`}
                       >
-                        USE
-                      </button>
+                        {animatingPotionId === potion.id ? 'CASTING… ✨' : 'USE'}
+                      </motion.button>
                     </div>
                   </div>
                 );
@@ -670,9 +682,14 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                   <td className="py-3 px-1 sm:px-2 text-center align-middle whitespace-nowrap">
                     <div className="flex items-center justify-center">
                       {p.hasSubmittedClue || p.isReady ? (
-                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/60 font-bold text-xs shadow-xs" title="Clue ready">
+                        <motion.span
+                          initial={{ scale: 0.6, rotate: -15 }}
+                          animate={{ scale: 1, rotate: 0 }}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/60 font-bold text-xs shadow-xs"
+                          title="Clue ready"
+                        >
                           <Check className="w-4 h-4 stroke-[3]" />
-                        </span>
+                        </motion.span>
                       ) : (
                         <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-900 text-slate-500 border border-slate-700 text-xs" title="Waiting for clue">
                           …
@@ -688,13 +705,22 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                         // Voting in progress
                         p.votedForId ? (
                           anonymousVoting ? (
-                            <span className="inline-flex items-center gap-1 bg-purple-950 text-purple-300 border border-purple-700 px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap shadow-xs">
+                            <motion.span
+                              initial={{ scale: 0.8 }}
+                              animate={{ scale: 1 }}
+                              className="inline-flex items-center gap-1 bg-purple-950 text-purple-300 border border-purple-700 px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap shadow-xs"
+                            >
                               <Check className="w-3 h-3 text-purple-400" /> Voted
-                            </span>
+                            </motion.span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 bg-rose-950/90 text-rose-200 border border-rose-700 px-2 py-0.5 rounded text-[11px] font-bold font-mono whitespace-nowrap shadow-xs" title={`Voted for ${votedTarget?.name || 'Unknown'}`}>
+                            <motion.span
+                              initial={{ scale: 0.8 }}
+                              animate={{ scale: 1 }}
+                              className="inline-flex items-center gap-1 bg-rose-950/90 text-rose-200 border border-rose-700 px-2 py-0.5 rounded text-[11px] font-bold font-mono whitespace-nowrap shadow-xs"
+                              title={`Voted for ${votedTarget?.name || 'Unknown'}`}
+                            >
                               👉 {votedTarget?.name.split(' ')[0] || 'Unknown'}
-                            </span>
+                            </motion.span>
                           )
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 bg-amber-950/40 border border-amber-800/60 px-2 py-0.5 rounded font-medium italic whitespace-nowrap">
@@ -715,8 +741,14 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
 
                       {/* Quick vote / accuse button if user can vote or change vote */}
                       {isClickableTarget && (
-                        <button
-                          onClick={() => onSelectVoteTarget?.(p.id)}
+                        <motion.button
+                          type="button"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.92 }}
+                          onClick={() => {
+                            sound.click();
+                            onSelectVoteTarget?.(p.id);
+                          }}
                           className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg border transition-all shrink-0 cursor-pointer whitespace-nowrap ${
                             isSelectedTarget
                               ? 'bg-rose-600 text-white border-rose-400 shadow-md ring-1 ring-rose-300'
@@ -725,7 +757,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                           title={`Select ${p.name} as Infiltrator accusation`}
                         >
                           {isSelectedTarget ? 'Selected' : 'Accuse'}
-                        </button>
+                        </motion.button>
                       )}
 
                       {/* Host can kick / remove player from the game directly */}
@@ -827,18 +859,21 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                         </div>
                       </div>
 
-                      <button
+                      <motion.button
                         disabled={hasUsedPotionThisTurn}
-                        onClick={() => onUsePotion?.(potion.id)}
+                        whileTap={!hasUsedPotionThisTurn ? { scale: 0.92 } : undefined}
+                        onClick={() => handleUsePotionWithAnimation(potion.id)}
                         className={`ml-2 px-3 py-1.5 rounded-lg text-[11px] font-display font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
-                          hasUsedPotionThisTurn
+                          animatingPotionId === potion.id
+                            ? 'bg-purple-400 text-slate-950 ring-4 ring-purple-300 animate-pulse'
+                            : hasUsedPotionThisTurn
                             ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-50'
                             : 'retro-button bg-purple-600 hover:bg-purple-500 active:scale-95 text-white border-purple-400 shadow-xs'
                         }`}
                         title={hasUsedPotionThisTurn ? 'Already used 1 potion this turn' : `Use ${potion.name}`}
                       >
-                        USE
-                      </button>
+                        {animatingPotionId === potion.id ? 'CASTING… ✨' : 'USE'}
+                      </motion.button>
                     </div>
                   );
                 })}

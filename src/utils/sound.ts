@@ -298,6 +298,234 @@ class SoundFX {
       // Ignore audio errors
     }
   }
+
+  // Voting Begins: dramatic tension chord with rising pitch
+  voteStart() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      // Low suspense thud
+      const subOsc = ctx.createOscillator();
+      const subGain = ctx.createGain();
+      subOsc.type = 'sine';
+      subOsc.frequency.setValueAtTime(140, now);
+      subOsc.frequency.exponentialRampToValueAtTime(70, now + 0.4);
+      subGain.gain.setValueAtTime(0.18, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      subOsc.connect(subGain);
+      subGain.connect(ctx.destination);
+      subOsc.start(now);
+      subOsc.stop(now + 0.45);
+
+      // Tension synth chord
+      [220, 261.63, 329.63, 440].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + 0.08);
+        osc.frequency.linearRampToValueAtTime(freq * 1.05, now + 0.35);
+
+        gain.gain.setValueAtTime(0.08, now + 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + 0.08);
+        osc.stop(now + 0.55);
+      });
+    } catch {
+      // Ignore audio errors
+    }
+  }
+
+  // Voting cast / accusation stamp sound
+  voteCast() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      // Stamp impact
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(280, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.12);
+
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.14);
+
+      // Follow-up metallic tick
+      const tick = ctx.createOscillator();
+      const tickGain = ctx.createGain();
+      tick.type = 'sine';
+      tick.frequency.setValueAtTime(900, now + 0.05);
+      tickGain.gain.setValueAtTime(0.08, now + 0.05);
+      tickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      tick.connect(tickGain);
+      tickGain.connect(ctx.destination);
+      tick.start(now + 0.05);
+      tick.stop(now + 0.18);
+    } catch {
+      // Ignore audio errors
+    }
+  }
+
+  // Voting end / Gavel strike
+  voteEnd() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      // Double gavel strike
+      [0, 0.16].forEach((offset) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(180, now + offset);
+        osc.frequency.exponentialRampToValueAtTime(50, now + offset + 0.22);
+
+        gain.gain.setValueAtTime(0.2, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.25);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + offset);
+        osc.stop(now + offset + 0.25);
+      });
+    } catch {
+      // Ignore audio errors
+    }
+  }
+
+  // Specialized Potion Activation SFX
+  potionUse(potionId?: string) {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      if (!potionId) {
+        this.potionDrink();
+        return;
+      }
+      if (potionId === 'oracle_serum') {
+        // High ethereal shimmer
+        [587.33, 880, 1174.66, 1760].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.04);
+          gain.gain.setValueAtTime(0.09, now + idx * 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.3);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.04);
+          osc.stop(now + idx * 0.04 + 0.3);
+        });
+      } else if (potionId === 'vote_shield') {
+        // Metallic barrier clink + protective chime
+        [350, 700, 1050].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now);
+          gain.gain.setValueAtTime(0.12 / (idx + 1), now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.35);
+        });
+      } else if (potionId === 'clue_lens') {
+        // Crystal focus ring
+        [440, 659.25, 880].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+          gain.gain.setValueAtTime(0.08, now + idx * 0.06);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.25);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.06);
+          osc.stop(now + idx * 0.06 + 0.25);
+        });
+      } else if (potionId === 'silence_curse') {
+        this.silence();
+      } else if (potionId === 'grid_scrambler') {
+        this.powerup();
+      } else {
+        this.potionDrink();
+      }
+    } catch {
+      // Ignore audio errors
+    }
+  }
+
+  // Celebratory fanfare for Innocents Victory
+  celebrateInnocents() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      // Majestic major chords: C - E - G - high C with brassy warmth
+      const notes = [
+        { f: 523.25, t: 0, d: 0.18 },
+        { f: 659.25, t: 0.14, d: 0.18 },
+        { f: 783.99, t: 0.28, d: 0.24 },
+        { f: 1046.5, t: 0.44, d: 0.55 },
+      ];
+      notes.forEach((n) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(n.f, now + n.t);
+        gain.gain.setValueAtTime(0.12, now + n.t);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + n.t + n.d);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + n.t);
+        osc.stop(now + n.t + n.d);
+      });
+    } catch {
+      // Ignore audio errors
+    }
+  }
+
+  // Stealth Victory fanfare for Infiltrator Victory
+  celebrateInfiltrator() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      // Sneaky noir chord: D minor / mysterious arpeggio into bold resolution
+      const notes = [
+        { f: 293.66, t: 0, d: 0.2 },
+        { f: 349.23, t: 0.12, d: 0.2 },
+        { f: 440, t: 0.24, d: 0.24 },
+        { f: 587.33, t: 0.38, d: 0.6 },
+      ];
+      notes.forEach((n) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(n.f, now + n.t);
+        gain.gain.setValueAtTime(0.09, now + n.t);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + n.t + n.d);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + n.t);
+        osc.stop(now + n.t + n.d);
+      });
+    } catch {
+      // Ignore audio errors
+    }
+  }
 }
 
 export const sound = new SoundFX();

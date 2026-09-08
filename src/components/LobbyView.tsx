@@ -338,8 +338,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Remove button: Host can remove any player/bot, or user can remove bot */}
-                    {(isHost || !p.isHuman) && players.length > 1 && !isSelf && (
+                    {/* Remove button: In room mode ONLY the Host can kick; in local modes user can manage roster */}
+                    {((gameMode === 'room' ? isHost : isHost || !p.isHuman)) && players.length > 1 && !isSelf && (
                       <button
                         onClick={() => onRemovePlayer(p.id)}
                         className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-slate-700/50 rounded transition-colors cursor-pointer"
@@ -758,14 +758,21 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
           {/* Start Game CTA */}
           <div className="pt-4 border-t-2 border-slate-700 space-y-2">
-            <button
-              onClick={onStartGame}
-              disabled={!canStart}
-              className="w-full retro-button py-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:pointer-events-none text-slate-950 rounded-xl font-display font-black text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2 shadow-md cursor-pointer"
-            >
-              <Play className="w-5 h-5 fill-slate-950" />
-              <span>{canStart ? 'Deal Cards & Start Round' : `Need at least 3 players (${players.length}/3)`}</span>
-            </button>
+            {gameMode === 'room' && !isHost ? (
+              <div className="w-full py-3 px-4 rounded-xl bg-slate-900/90 border border-slate-700 text-center flex items-center justify-center gap-2.5 text-slate-300 font-display text-xs sm:text-sm font-bold shadow-inner">
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                <span className="text-amber-300">Waiting for Host to start the game...</span>
+              </div>
+            ) : (
+              <button
+                onClick={onStartGame}
+                disabled={!canStart}
+                className="w-full retro-button py-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:pointer-events-none text-slate-950 rounded-xl font-display font-black text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2 shadow-md cursor-pointer active:scale-95 transition-transform"
+              >
+                <Play className="w-5 h-5 fill-slate-950" />
+                <span>{canStart ? 'Deal Cards & Start Round' : `Need at least 3 players (${players.length}/3)`}</span>
+              </button>
+            )}
 
             <div className="flex items-center justify-between text-xs text-slate-400 px-1">
               <button
