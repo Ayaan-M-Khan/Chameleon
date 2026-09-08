@@ -20,7 +20,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
             </div>
             <div>
               <h3 className="font-display font-black text-lg text-white uppercase">
-                How to Play Chameleon
+                How to Play The Infiltrator
               </h3>
               <p className="text-xs text-slate-400">The social deduction word game of blending in, deceptive clues, and secret codes</p>
             </div>
@@ -41,11 +41,11 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
               <span className="w-5 h-5 bg-amber-400 text-slate-950 font-black rounded flex items-center justify-center text-[11px]">
                 1
               </span>
-              The Secret Coordinate & The Chameleon
+              The Secret Coordinate & The Infiltrator
             </h4>
             <p>
               Each round, a 16-word topic card (4x4 matrix) is revealed. A secret coordinate is determined (e.g. <strong>Row 2, Column C → Queen</strong>).
-              All innocent players see the coordinate. <strong>One player is secretly the Chameleon</strong> and only sees the card words—not the coordinate!
+              All innocent players see the coordinate. <strong>One player is secretly The Infiltrator</strong> and only sees the card words—not the coordinate!
             </p>
           </div>
 
@@ -59,7 +59,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
             </h4>
             <p>
               Every player takes a turn submitting <strong>a clue (up to 80 characters)</strong> related to the secret topic.
-              Innocents want to prove they know the word without making it too obvious. The Chameleon must blend in by using clues from earlier players or ambiguous hints!
+              Innocents want to prove they know the word without making it too obvious. The Infiltrator must blend in by using clues from earlier players or ambiguous hints!
             </p>
           </div>
 
@@ -72,7 +72,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
               The Accusation Vote
             </h4>
             <p>
-              Once all clues are on the table, players debate and vote on who they believe is the Chameleon.
+              Once all clues are on the table, players debate and vote on who they believe is The Infiltrator.
             </p>
           </div>
 
@@ -80,20 +80,20 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
           <div className="p-3 bg-slate-800/80 rounded-lg border border-emerald-500/40">
             <h4 className="font-display font-bold text-emerald-400 uppercase flex items-center gap-1.5 mb-1 text-xs">
               <Trophy className="w-4 h-4 text-emerald-400" />
-              Scoring & Chameleon Escape
+              Scoring & Infiltrator Escape
             </h4>
             <ul className="space-y-1.5 mt-1 list-disc pl-4 text-slate-300">
               <li>
-                <strong className="text-white">Innocents Win (+2 pts each):</strong> The Chameleon is caught by majority vote, and guesses the wrong word.
+                <strong className="text-white">Innocents Win (+2 pts each):</strong> The Infiltrator is caught by majority vote, and guesses the wrong word.
               </li>
               <li>
-                <strong className="text-white">Chameleon Steals Win (+2 pts to Chameleon):</strong> The Chameleon is caught, but in their Last Stand they inspect all player hints and correctly deduce and select the secret word from the 16-tile matrix!
+                <strong className="text-white">Infiltrator Steals Win (+2 pts to Infiltrator):</strong> The Infiltrator is caught, but in their Last Stand they inspect all player hints and correctly deduce and select the secret word from the 16-tile matrix!
               </li>
               <li>
-                <strong className="text-white">Chameleon Escapes Undetected (+3 pts to Chameleon):</strong> An innocent player is mistakenly voted out!
+                <strong className="text-white">Infiltrator Escapes Undetected (+3 pts to Infiltrator):</strong> An innocent player is mistakenly voted out!
               </li>
               <li>
-                <strong className="text-white">Bonus Point (+1 pt):</strong> If enabled in settings, every innocent who voted for the true Chameleon gets +1 point.
+                <strong className="text-white">Bonus Point (+1 pt):</strong> If enabled in settings, every innocent who voted for the true Infiltrator gets +1 point.
               </li>
             </ul>
           </div>

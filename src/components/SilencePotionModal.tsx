@@ -18,7 +18,7 @@ export const SilencePotionModal: React.FC<SilencePotionModalProps> = ({
   onConfirmSilence,
   onClose,
 }) => {
-  // Targetable candidates: all players except the active Chameleon
+  // Targetable candidates: all players except the active Infiltrator
   const candidatePlayers = players.filter((p) => p.id !== activePlayerId);
   const [selectedTargetId, setSelectedTargetId] = useState<string>(candidatePlayers[0]?.id || '');
 
@@ -66,7 +66,7 @@ export const SilencePotionModal: React.FC<SilencePotionModalProps> = ({
                 <h3 className="text-lg sm:text-xl font-display font-black uppercase tracking-wider text-rose-300 flex items-center gap-2">
                   <span>ELIXIR OF SILENCE</span>
                   <span className="text-[10px] font-mono font-bold bg-rose-900/90 text-rose-200 border border-rose-400 px-2 py-0.5 rounded">
-                    Chameleon Mute
+                    Infiltrator Mute
                   </span>
                 </h3>
                 <p className="text-xs text-rose-200/80 font-mono">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Check, Settings, ShieldCheck, Clock, Eye, Sparkles, Trophy, Users } from 'lucide-react';
+import { X, Check, Settings, ShieldCheck, Clock, Eye, Sparkles, Trophy, Users, FlaskConical } from 'lucide-react';
 import { GameSettings } from '../types';
 
 interface OptionsModalProps {
@@ -22,7 +22,6 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   };
 
   const timerDurations = [30, 45, 60, 90, 120];
-  const targetScores = [5, 8, 10, 15, 0];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs overflow-y-auto">
@@ -37,7 +36,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
               <h3 className="font-display font-black text-lg text-white uppercase">
                 Game & Lobby Settings
               </h3>
-              <p className="text-xs text-slate-400">Configure chameleons, round timer, and scoring</p>
+              <p className="text-xs text-slate-400">Configure infiltrators, round timer, and scoring</p>
             </div>
           </div>
           <button
@@ -50,19 +49,19 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
 
         {/* Options List */}
         <div className="space-y-3.5">
-          {/* 1. Number of Chameleons */}
+          {/* 1. Number of Infiltrators */}
           <div className="p-3 rounded-lg border-2 border-slate-700 bg-slate-800/80 hover:border-slate-600 transition-all">
             <div className="flex items-center justify-between mb-2">
               <div className="font-bold text-sm text-white flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-amber-400" />
-                <span>Number of Chameleons</span>
+                <span>Number of Infiltrators</span>
               </div>
               <span className="text-xs font-mono font-bold text-amber-300">
-                {settings.chameleonCount || 1} Chameleon{(settings.chameleonCount || 1) > 1 ? 's' : ''}
+                {settings.chameleonCount || 1} Infiltrator{(settings.chameleonCount || 1) > 1 ? 's' : ''}
               </span>
             </div>
             <p className="text-xs text-slate-400 mb-2">
-              Select how many players are secret Chameleons (2 recommended for 5+ players).
+              Select how many players are secret Infiltrators (2 recommended for 5+ players).
             </p>
             <div className="grid grid-cols-2 gap-2">
               {[1, 2].map((count) => {
@@ -78,7 +77,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                         : 'bg-slate-700/80 text-slate-300 hover:bg-slate-700 border border-slate-600'
                     }`}
                   >
-                    {count === 1 ? '1 Chameleon (Classic)' : '2 Chameleons (Double Trouble)'}
+                    {count === 1 ? '1 Infiltrator (Classic)' : '2 Infiltrators (Double Trouble)'}
                   </button>
                 );
               })}
@@ -140,28 +139,68 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                 <span>Points & Match Target</span>
               </div>
               <span className="text-xs font-mono font-bold text-amber-300">
-                {settings.targetScore === 0 ? 'Match Target: ∞ Infinite' : `First to ${settings.targetScore || 5} pts`}
+                First to {settings.targetScore || 5} pts
               </span>
             </div>
 
-            {/* Target Score Presets */}
+            {/* Custom Input for Target Score */}
             <div>
-              <span className="text-[11px] text-slate-400 block mb-1">Score to Win Match:</span>
-              <div className="grid grid-cols-5 gap-1.5">
-                {targetScores.map((score) => {
-                  const isSelected = (settings.targetScore ?? 5) === score;
+              <label className="text-[11px] text-slate-300 font-semibold block mb-1.5">
+                Custom Points to Win Match:
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    min="1"
+                    max="999"
+                    value={settings.targetScore || 5}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      onUpdateSettings({ targetScore: isNaN(val) || val < 1 ? 1 : val });
+                    }}
+                    className="w-full bg-slate-900 border-2 border-slate-600 focus:border-amber-400 rounded-lg px-3 py-1.5 text-sm font-mono font-bold text-amber-300 outline-none transition-colors"
+                    placeholder="Enter points to win..."
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-slate-400 pointer-events-none">
+                    points
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onUpdateSettings({ targetScore: Math.max(1, (settings.targetScore || 5) - 1) })}
+                  className="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white font-mono font-bold flex items-center justify-center cursor-pointer transition-colors"
+                  title="Decrease points"
+                >
+                  -
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdateSettings({ targetScore: (settings.targetScore || 5) + 1 })}
+                  className="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white font-mono font-bold flex items-center justify-center cursor-pointer transition-colors"
+                  title="Increase points"
+                >
+                  +
+                </button>
+              </div>
+
+              {/* Quick suggestions */}
+              <div className="flex items-center gap-1.5 mt-2">
+                <span className="text-[10px] text-slate-400 font-mono">Presets:</span>
+                {[3, 5, 8, 10, 15, 20].map((score) => {
+                  const isSelected = settings.targetScore === score;
                   return (
                     <button
                       key={score}
                       type="button"
                       onClick={() => onUpdateSettings({ targetScore: score })}
-                      className={`py-1 px-1.5 rounded font-mono font-bold text-xs uppercase tracking-wider text-center transition-all cursor-pointer ${
+                      className={`py-0.5 px-2 rounded text-[11px] font-mono font-bold transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-amber-400 text-slate-950 font-black ring-1 ring-amber-300'
-                          : 'bg-slate-700/70 text-slate-300 hover:bg-slate-700 border border-slate-600'
+                          ? 'bg-amber-400 text-slate-950 font-black'
+                          : 'bg-slate-900/90 text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500'
                       }`}
                     >
-                      {score === 0 ? '∞ Infn' : `${score} pts`}
+                      {score}
                     </button>
                   );
                 })}
@@ -196,7 +235,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
               </div>
 
               <div className="bg-slate-900/80 p-2 rounded border border-slate-700">
-                <span className="text-[10px] text-slate-400 block">Chameleon Escapes</span>
+                <span className="text-[10px] text-slate-400 block">Infiltrator Escapes</span>
                 <div className="flex items-center justify-between mt-1">
                   <span className="text-xs font-mono font-bold text-purple-300">
                     +{settings.chameleonEscapePoints || 2} pts
@@ -247,15 +286,15 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
             </div>
           </div>
 
-          {/* 4. 1 point for guessing chameleon: [YES/NO] */}
+          {/* 4. 1 point for guessing infiltrator: [YES/NO] */}
           <div className="flex items-center justify-between p-3 rounded-lg border-2 border-slate-700 bg-slate-800/80 hover:border-slate-600 transition-all">
             <div className="pr-4">
               <div className="font-bold text-sm text-white flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-amber-400" />
-                <span>+1 Bonus Point for voting Chameleon</span>
+                <span>+1 Bonus Point for voting Infiltrator</span>
               </div>
               <p className="text-xs text-slate-400">
-                Bonus point awarded to each individual player who correctly voted for the Chameleon.
+                Bonus point awarded to each individual player who correctly voted for The Infiltrator.
               </p>
             </div>
             <button
@@ -270,15 +309,15 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
             </button>
           </div>
 
-          {/* 5. Chameleon can see one random player's clue early: [YES/NO] */}
+          {/* 5. Infiltrator can see one random player's clue early: [YES/NO] */}
           <div className="flex items-center justify-between p-3 rounded-lg border-2 border-slate-700 bg-slate-800/80 hover:border-slate-600 transition-all">
             <div className="pr-4">
               <div className="font-bold text-sm text-white flex items-center gap-1.5">
                 <Eye className="w-4 h-4 text-purple-400" />
-                <span>Chameleon sees 1 player clue early</span>
+                <span>Infiltrator sees 1 player clue early</span>
               </div>
               <p className="text-xs text-slate-400">
-                Gives the Chameleon a fighting chance by letting them secretly view one innocent clue before submitting.
+                Gives The Infiltrator a fighting chance by letting them secretly view one innocent clue before submitting.
               </p>
             </div>
             <button
@@ -313,6 +352,29 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
               }`}
             >
               {settings.anonymousVoting ? 'YES' : 'NO'}
+            </button>
+          </div>
+
+          {/* 7. In-Game Items & Potion Shop: [ENABLED/DISABLED] */}
+          <div className="flex items-center justify-between p-3 rounded-lg border-2 border-slate-700 bg-slate-800/80 hover:border-slate-600 transition-all">
+            <div className="pr-4">
+              <div className="font-bold text-sm text-white flex items-center gap-1.5">
+                <FlaskConical className="w-4 h-4 text-purple-400" />
+                <span>In-Game Items & Potion Shop</span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Enable tactical potions (Oracle Glass, Vote Shield, Elixir of Silence, etc.) and the shop phase every 3 rounds.
+              </p>
+            </div>
+            <button
+              onClick={() => onUpdateSettings({ itemsEnabled: settings.itemsEnabled === false ? true : false })}
+              className={`retro-button px-3 py-1 rounded text-xs font-mono font-black uppercase tracking-wider cursor-pointer ${
+                settings.itemsEnabled !== false
+                  ? 'bg-emerald-400 text-emerald-950 border-emerald-300'
+                  : 'bg-slate-700 text-slate-400 border-slate-600'
+              }`}
+            >
+              {settings.itemsEnabled !== false ? 'ENABLED' : 'DISABLED'}
             </button>
           </div>
         </div>

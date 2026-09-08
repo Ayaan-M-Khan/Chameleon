@@ -128,7 +128,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                       ? 'bg-rose-950 text-yellow-300 border-rose-500'
                       : 'bg-emerald-950 text-emerald-300 border-emerald-500'
                   }`}>
-                    {isChameleon ? '🦎 Chameleon' : '🎯 Innocent'}
+                    {isChameleon ? '🕵️ The Infiltrator' : '🎯 Innocent'}
                   </span>
                 </div>
 
@@ -188,7 +188,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                                       ? 'text-rose-300 bg-rose-950/80 border-rose-700/60'
                                       : 'text-emerald-300 bg-emerald-950/80 border-emerald-700/60'
                                   }`}>
-                                    {item.roleTarget === 'fox' ? 'Chameleon Only' : 'Innocent Only'}
+                                    {item.roleTarget === 'fox' ? 'Infiltrator Only' : 'Innocent Only'}
                                   </span>
                                 </div>
                               </div>

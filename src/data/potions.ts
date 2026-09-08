@@ -12,7 +12,7 @@ export const POTION_CATALOG: PotionItem[] = [
   {
     id: 'grid_scrambler',
     name: 'Grid Scrambler',
-    description: 'Randomly shuffles the coordinate positions of the 16 words on the board for this round to disorient the Chameleon.',
+    description: 'Randomly shuffles the coordinate positions of the 16 words on the board for this round to disorient The Infiltrator.',
     cost: 100,
     roleTarget: 'innocent',
     icon: '🌀',

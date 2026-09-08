@@ -151,7 +151,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                           <span className="text-xs text-slate-400">
                             {isEditingClue
                               ? '(You can revise your hint before the last person submits)'
-                              : '(Give a subtle hint without revealing secret to Chameleon)'}
+                              : '(Give a subtle hint without revealing secret to Infiltrator)'}
                           </span>
                         </div>
                         <span className="text-xs font-mono font-bold bg-slate-800 text-amber-300 border border-slate-700 px-2 py-0.5 rounded">
@@ -272,7 +272,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
               <div>
                 <h3 className="font-display font-black text-base sm:text-lg uppercase tracking-tight text-white flex items-center gap-2">
                   <AlertOctagon className="w-5 h-5 text-rose-400" />
-                  Who's the Chameleon? Vote.
+                  Who's The Infiltrator? Vote.
                 </h3>
                 <p className="text-xs text-slate-400">
                   Review everyone's clue in the left table. Cast your vote for the player you suspect is blending in!
@@ -424,7 +424,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                       <VolumeX className="w-4 h-4 text-rose-400 shrink-0" />
                       <div>
                         <strong className="font-bold text-rose-300">You are silenced! </strong>
-                        <span>The Chameleon's Elixir of Silence prevents you from speaking or debating. Your clue is still shown above!</span>
+                        <span>The Infiltrator's Elixir of Silence prevents you from speaking or debating. Your clue is still shown above!</span>
                       </div>
                     </div>
                   ) : (
@@ -513,7 +513,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                             </span>
                           )}
                           {isTargetSilenced && (
-                            <span className="text-[9px] bg-rose-950 text-rose-300 border border-rose-600 font-bold px-1 rounded flex items-center gap-0.5" title="Muted by Chameleon">
+                            <span className="text-[9px] bg-rose-950 text-rose-300 border border-rose-600 font-bold px-1 rounded flex items-center gap-0.5" title="Muted by Infiltrator">
                               🤐 Muted
                             </span>
                           )}
@@ -582,21 +582,21 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
         );
       })()}
 
-      {/* PHASE 3: CHAMELEON ESCAPE GUESS */}
+      {/* PHASE 3: INFILTRATOR ESCAPE GUESS */}
       {gamePhase === 'fox_guess' && (
         <div className="p-4 bg-amber-950/40 border-2 border-amber-600/70 rounded-lg text-slate-100 space-y-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-2xl">🦎</span>
+                <span className="text-2xl">🕵️</span>
                 <div>
                   <h3 className="font-display font-black text-base uppercase text-yellow-300">
-                    Chameleon's Last Stand: {caughtFoxPlayer?.name || 'The Chameleon'} is Caught!
+                    Infiltrator's Last Stand: {caughtFoxPlayer?.name || 'The Infiltrator'} is Caught!
                   </h3>
                   <p className="text-xs text-slate-300">
                     {isCurrentPlayerTheCaughtFox
                       ? 'You were caught! Select the secret tile on the 4x4 matrix above to steal the round (+2 pts)!'
-                      : `${caughtFoxPlayer?.name} was voted as the Chameleon! They are reviewing everyone's hints to guess the secret word...`}
+                      : `${caughtFoxPlayer?.name} was voted as The Infiltrator! They are reviewing everyone's hints to guess the secret word...`}
                   </p>
                 </div>
               </div>
@@ -616,7 +616,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
             )}
           </div>
 
-          {/* Revealed hints reminder for the Chameleon's escape */}
+          {/* Revealed hints reminder for the Infiltrator's escape */}
           <div className="pt-2 border-t border-amber-800/80">
             <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 block mb-1.5">
               Player Clues / Hints Given This Round:
@@ -648,23 +648,23 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="text-3xl">
-                  {roundResolution.winner === 'innocents' ? '🏆' : '🦊'}
+                  {roundResolution.winner === 'innocents' ? '🏆' : '🕵️'}
                 </span>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-xs font-extrabold uppercase tracking-widest px-2 py-0.5 rounded bg-slate-900 text-white border border-slate-700">
-                      {roundResolution.winner === 'innocents' ? 'INNOCENTS WIN' : 'CHAMELEON WINS'}
+                      {roundResolution.winner === 'innocents' ? 'INNOCENTS WIN' : 'INFILTRATOR WINS'}
                     </span>
                     <span className="text-xs text-slate-300 font-semibold">
-                      {roundResolution.reason === 'innocents_caught_fox' && 'Chameleon caught & missed secret word!'}
-                      {roundResolution.reason === 'fox_stole_win' && 'Chameleon was caught, but correctly stole the word!'}
-                      {roundResolution.reason === 'fox_escaped_undetected' && 'Chameleon slipped through undetected!'}
+                      {roundResolution.reason === 'innocents_caught_fox' && 'Infiltrator caught & missed secret word!'}
+                      {roundResolution.reason === 'fox_stole_win' && 'Infiltrator was caught, but correctly stole the word!'}
+                      {roundResolution.reason === 'fox_escaped_undetected' && 'Infiltrator slipped through undetected!'}
                     </span>
                   </div>
 
                   <div className="mt-1 flex items-center gap-3 flex-wrap text-sm">
                     <span>
-                      The Chameleon was: <strong className="font-display underline text-yellow-300">{roundResolution.foxPlayerName}</strong>
+                      The Infiltrator was: <strong className="font-display underline text-yellow-300">{roundResolution.foxPlayerName}</strong>
                     </span>
                     <span>•</span>
                     <span>
@@ -674,7 +674,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                       <>
                         <span>•</span>
                         <span>
-                          Chameleon Guessed: <strong className="font-mono text-amber-300 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">{roundResolution.foxGuessWord}</strong>
+                          Infiltrator Guessed: <strong className="font-mono text-amber-300 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">{roundResolution.foxGuessWord}</strong>
                         </span>
                       </>
                     )}
@@ -695,7 +695,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                   </button>
                 )}
 
-                {roundNumber && roundNumber % 3 === 0 ? (
+                {roundNumber && roundNumber % 3 === 0 && settings.itemsEnabled !== false ? (
                   <button
                     onClick={onNextRound}
                     className="retro-button px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg font-display font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md border-amber-300"

@@ -95,7 +95,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         <h1 className="font-display font-black text-4xl sm:text-6xl text-white tracking-tight uppercase drop-shadow-md">
-          🦎 <span className="text-emerald-400">Chameleon</span>
+          🕵️ <span className="text-emerald-400">The Infiltrator</span>
         </h1>
 
         <p className="text-slate-300 text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
@@ -521,7 +521,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </span>
             <h5 className="font-display font-bold text-white text-xs uppercase">The 4×4 Matrix</h5>
             <p className="text-slate-400 leading-relaxed">
-              A 16-word topic card is revealed. Everyone sees the secret coordinate (e.g. <strong>C2</strong>), except the Chameleon!
+              A 16-word topic card is revealed. Everyone sees the secret coordinate (e.g. <strong>C2</strong>), except The Infiltrator!
             </p>
           </div>
 
@@ -531,7 +531,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </span>
             <h5 className="font-display font-bold text-white text-xs uppercase">Blend In Or Deduce</h5>
             <p className="text-slate-400 leading-relaxed">
-              Each player writes a clue (up to 80 chars). Innocents prove their knowledge subtly; the Chameleon fakes it to blend in.
+              Each player writes a clue (up to 80 chars). Innocents prove their knowledge subtly; The Infiltrator fakes it to blend in.
             </p>
           </div>
 
@@ -541,7 +541,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </span>
             <h5 className="font-display font-bold text-white text-xs uppercase">Vote Out The Impostor</h5>
             <p className="text-slate-400 leading-relaxed">
-              Debate and vote! If the Chameleon is accused, they get one final chance to inspect all hints and guess the secret word to steal the win!
+              Debate and vote! If The Infiltrator is accused, they get one final chance to inspect all hints and guess the secret word to steal the win!
             </p>
           </div>
         </div>

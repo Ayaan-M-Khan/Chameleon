@@ -4,64 +4,65 @@ import { Sparkles, X, Coins, TrendingUp, HelpCircle, Check, Dices, Award } from 
 import { Player } from '../types';
 import { sound } from '../utils/sound';
 
-interface ChameleonBoosterModalProps {
+interface InfiltratorBoosterModalProps {
   isOpen: boolean;
-  players: Player[];
-  activePlayer: Player;
+  players?: Player[];
+  allPlayers?: Player[];
+  activePlayer?: Player;
+  player?: Player;
   onUpdateBoost: (playerId: string, goldAmount: number) => void;
   onClose: () => void;
 }
 
-export const ChameleonBoosterModal: React.FC<ChameleonBoosterModalProps> = ({
+export const InfiltratorBoosterModal: React.FC<InfiltratorBoosterModalProps> = ({
   isOpen,
-  players,
-  activePlayer,
+  players: propPlayers,
+  allPlayers,
+  activePlayer: propActivePlayer,
+  player: propPlayer,
   onUpdateBoost,
   onClose,
 }) => {
-  const currentGold = activePlayer.gold ?? 0;
-  const initialBoost = activePlayer.chameleonBoostGold ?? 0;
+  const currentActivePlayer = propActivePlayer || propPlayer;
+  const currentPlayers = propPlayers || allPlayers || [];
+
+  const currentGold = currentActivePlayer?.gold ?? 0;
+  const initialBoost = currentActivePlayer?.infiltratorBoostGold ?? currentActivePlayer?.chameleonBoostGold ?? 0;
   const [selectedGold, setSelectedGold] = useState<number>(initialBoost);
 
   // Sync when opened
   React.useEffect(() => {
-    if (isOpen) {
-      setSelectedGold(activePlayer.chameleonBoostGold ?? 0);
+    if (isOpen && currentActivePlayer) {
+      setSelectedGold(currentActivePlayer.infiltratorBoostGold ?? currentActivePlayer.chameleonBoostGold ?? 0);
     }
-  }, [isOpen, activePlayer.chameleonBoostGold]);
+  }, [isOpen, currentActivePlayer?.infiltratorBoostGold, currentActivePlayer?.chameleonBoostGold]);
 
-  // Probability calculations
-  const oddsBreakdown = useMemo(() => {
-    const ticketMap = players.map((p) => {
-      const isSelf = p.id === activePlayer.id;
-      const boostGold = isSelf ? selectedGold : (p.chameleonBoostGold ?? 0);
-      const extraTickets = Math.floor(boostGold / 50);
-      const totalTickets = 1 + extraTickets;
-      return {
-        player: p,
-        isSelf,
-        boostGold,
-        tickets: totalTickets,
-      };
+  // Probability calculations: strictly private to currentActivePlayer
+  const myExtraTickets = Math.floor(selectedGold / 50);
+  const myTotalTickets = 1 + myExtraTickets;
+
+  const { myPercentage, totalRoomTickets } = useMemo(() => {
+    const targetPlayerId = currentActivePlayer?.id;
+    let totalTickets = 0;
+    currentPlayers.forEach((p) => {
+      const isSelf = p.id === targetPlayerId;
+      const boostGold = isSelf ? selectedGold : (p.infiltratorBoostGold ?? p.chameleonBoostGold ?? 0);
+      const tickets = 1 + Math.floor(boostGold / 50);
+      totalTickets += tickets;
     });
 
-    const totalTicketsAll = ticketMap.reduce((acc, curr) => acc + curr.tickets, 0);
+    const percentage = totalTickets > 0 ? (myTotalTickets / totalTickets) * 100 : 0;
+    return {
+      myPercentage: percentage.toFixed(1),
+      totalRoomTickets: totalTickets,
+    };
+  }, [currentPlayers, currentActivePlayer?.id, selectedGold, myTotalTickets]);
 
-    return ticketMap.map((item) => ({
-      ...item,
-      percentage: totalTicketsAll > 0 ? (item.tickets / totalTicketsAll) * 100 : 0,
-      totalTicketsAll,
-    }));
-  }, [players, activePlayer.id, selectedGold]);
-
-  const myOdds = oddsBreakdown.find((o) => o.isSelf);
-  const myPercentage = myOdds ? myOdds.percentage.toFixed(1) : '25.0';
-
-  if (!isOpen) return null;
+  if (!isOpen || !currentActivePlayer) return null;
 
   const handleSave = () => {
     sound.powerup();
-    onUpdateBoost(activePlayer.id, selectedGold);
+    onUpdateBoost(currentActivePlayer.id, selectedGold);
     onClose();
   };
 
@@ -96,16 +97,16 @@ export const ChameleonBoosterModal: React.FC<ChameleonBoosterModalProps> = ({
           {/* Header */}
           <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 p-4 sm:p-5 border-b-2 border-amber-500/50 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <span className="text-2xl select-none">🦎</span>
+              <span className="text-2xl select-none">🕵️</span>
               <div>
                 <h3 className="text-lg sm:text-xl font-display font-black uppercase tracking-wider text-amber-300 flex items-center gap-2">
-                  <span>CHAMELEON ODDS BOOSTER</span>
+                  <span>INFILTRATOR ODDS BOOSTER</span>
                   <span className="text-[10px] font-mono font-bold bg-amber-900/90 text-amber-200 border border-amber-400 px-2 py-0.5 rounded">
                     Gold Bribe
                   </span>
                 </h3>
                 <p className="text-xs text-amber-200/80 font-mono">
-                  Use gold to increase your probability of drawing the Chameleon role
+                  Use gold to increase your probability of drawing The Infiltrator role
                 </p>
               </div>
             </div>
@@ -137,14 +138,14 @@ export const ChameleonBoosterModal: React.FC<ChameleonBoosterModalProps> = ({
               <div className="p-3 bg-emerald-950/60 rounded-xl border border-emerald-500/50 flex flex-col justify-between">
                 <span className="text-[11px] font-mono text-emerald-300 font-bold uppercase flex items-center gap-1">
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                  Your Chameleon Chance
+                  Your Infiltrator Chance
                 </span>
                 <div className="flex items-baseline gap-1 mt-1">
                   <span className="text-2xl font-mono font-black text-yellow-300">
                     {myPercentage}%
                   </span>
                   <span className="text-[10px] font-mono text-emerald-300 font-bold">
-                    ({myOdds?.tickets} of {myOdds?.totalTicketsAll} tickets)
+                    ({myTotalTickets} of {totalRoomTickets} tickets)
                   </span>
                 </div>
               </div>
@@ -208,67 +209,56 @@ export const ChameleonBoosterModal: React.FC<ChameleonBoosterModalProps> = ({
               </div>
             </div>
 
-            {/* Probability Progress Bar */}
+            {/* Your Probability Gauge */}
             <div>
-              <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-1.5">
-                <span>Room Probability Share</span>
-                <span className="text-amber-300 font-bold">Total: 100%</span>
+              <div className="flex items-center justify-between text-xs font-mono mb-1.5">
+                <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                  Your Infiltrator Chance
+                </span>
+                <span className="text-yellow-300 font-bold text-sm">{myPercentage}%</span>
               </div>
-              <div className="w-full h-3 rounded-full overflow-hidden bg-slate-900 flex border border-slate-700">
-                {oddsBreakdown.map((item, idx) => {
-                  const colors = ['bg-emerald-500', 'bg-purple-500', 'bg-amber-500', 'bg-sky-500', 'bg-rose-500'];
-                  const color = item.isSelf ? 'bg-amber-400' : colors[idx % colors.length];
-                  return (
-                    <div
-                      key={item.player.id}
-                      style={{ width: `${item.percentage}%` }}
-                      className={`h-full ${color} transition-all duration-300`}
-                      title={`${item.player.name}: ${item.percentage.toFixed(1)}%`}
-                    />
-                  );
-                })}
+              <div className="w-full h-3.5 rounded-full overflow-hidden bg-slate-900 flex border border-slate-700">
+                <div
+                  style={{ width: `${Math.min(100, Math.max(5, parseFloat(myPercentage)))}%` }}
+                  className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-300 rounded-full"
+                />
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono mt-1">
+                <span>Lottery Share: {myTotalTickets} of {totalRoomTickets} total tickets</span>
+                <span>Base odds: {(100 / Math.max(1, currentPlayers.length)).toFixed(1)}%</span>
               </div>
             </div>
 
-            {/* Odds Table Breakdown */}
-            <div className="bg-slate-900/90 rounded-xl border border-slate-800 overflow-hidden text-xs">
-              <table className="w-full text-left">
-                <thead className="bg-slate-800/80 text-[10px] uppercase font-mono text-slate-400 border-b border-slate-700">
-                  <tr>
-                    <th className="p-2">Player</th>
-                    <th className="p-2 text-center">Gold Invested</th>
-                    <th className="p-2 text-center">Tickets</th>
-                    <th className="p-2 text-right">Chameleon Chance</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {oddsBreakdown.map((item) => (
-                    <tr
-                      key={item.player.id}
-                      className={item.isSelf ? 'bg-amber-950/30 font-bold text-amber-200' : 'text-slate-300'}
-                    >
-                      <td className="p-2 flex items-center gap-1.5 truncate">
-                        <span>{item.player.avatar}</span>
-                        <span className="truncate">{item.player.name}</span>
-                        {item.isSelf && (
-                          <span className="text-[9px] bg-amber-400 text-slate-950 px-1 py-0.2 rounded font-black">
-                            YOU
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-2 text-center font-mono text-amber-300">
-                        {item.boostGold > 0 ? `🪙 ${item.boostGold}g` : '0g'}
-                      </td>
-                      <td className="p-2 text-center font-mono font-bold">
-                        {item.tickets} 🎟️
-                      </td>
-                      <td className="p-2 text-right font-mono font-black text-yellow-300">
-                        {item.percentage.toFixed(1)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Personal Investment & Ticket Summary */}
+            <div className="bg-slate-900/90 rounded-xl border border-slate-800 p-3.5 space-y-3">
+              <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-800">
+                <span className="text-slate-400">Your Current Gold:</span>
+                <span className="font-mono font-bold text-amber-300">🪙 {currentGold}g</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
+                  <span className="text-[10px] font-mono uppercase text-slate-400 block mb-0.5">Your Gold Bribe</span>
+                  <span className="font-mono font-bold text-amber-300 text-sm">
+                    {selectedGold > 0 ? `🪙 -${selectedGold}g` : '0g (Free)'}
+                  </span>
+                </div>
+                <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
+                  <span className="text-[10px] font-mono uppercase text-slate-400 block mb-0.5">Your Tickets</span>
+                  <span className="font-mono font-bold text-white text-sm">
+                    {myTotalTickets} 🎟️ <span className="text-[10px] text-amber-300 font-normal">({1} base + {myExtraTickets} bonus)</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Confidentiality Notice */}
+              <div className="pt-2 border-t border-slate-800/80 flex items-start gap-2 text-[11px] text-slate-300 leading-relaxed">
+                <span className="text-emerald-400 mt-0.5">🔒</span>
+                <span>
+                  <strong className="text-white">Confidential Investment:</strong> Other players cannot see your gold bribe or your odds. Only your private chance is displayed.
+                </span>
+              </div>
             </div>
           </div>
 

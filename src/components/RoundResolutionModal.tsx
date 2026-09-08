@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Award, ArrowRight, Eye, RefreshCw, X, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Trophy, Award, ArrowRight, Eye, RefreshCw, X, ShieldAlert, CheckCircle2, Sparkles } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { Player, RoundResolution } from '../types';
 
 interface RoundResolutionModalProps {
@@ -26,6 +27,113 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
 
   const isInnocentWin = roundResolution.winner === 'innocents';
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+
+  // Trigger celebration confetti & particle animation based on who won
+  useEffect(() => {
+    if (!isOpen || !roundResolution) return;
+
+    if (isInnocentWin) {
+      // --- INNOCENTS CELEBRATION (Emerald, Gold, Cyan, Silver) ---
+      confetti({
+        particleCount: 55,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ['#10b981', '#34d399', '#f59e0b', '#fbbf24', '#38bdf8', '#ffffff'],
+        disableForReducedMotion: true,
+      });
+
+      const timer1 = setTimeout(() => {
+        confetti({
+          particleCount: 45,
+          angle: 60,
+          spread: 60,
+          origin: { x: 0.1, y: 0.7 },
+          colors: ['#10b981', '#34d399', '#6ee7b7', '#f59e0b', '#38bdf8'],
+          disableForReducedMotion: true,
+        });
+        confetti({
+          particleCount: 45,
+          angle: 120,
+          spread: 60,
+          origin: { x: 0.9, y: 0.7 },
+          colors: ['#10b981', '#34d399', '#6ee7b7', '#f59e0b', '#38bdf8'],
+          disableForReducedMotion: true,
+        });
+      }, 250);
+
+      const timer2 = setTimeout(() => {
+        confetti({
+          particleCount: 35,
+          spread: 110,
+          origin: { y: 0.42 },
+          colors: ['#34d399', '#fbbf24', '#ffffff', '#10b981'],
+          shapes: ['circle', 'square'],
+          disableForReducedMotion: true,
+        });
+      }, 550);
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
+    } else {
+      // --- INFILTRATOR CELEBRATION (Crimson, Violet, Amber, Neon Rose) ---
+      confetti({
+        particleCount: 60,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ['#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#fbbf24', '#dc2626'],
+        disableForReducedMotion: true,
+      });
+
+      const timer1 = setTimeout(() => {
+        confetti({
+          particleCount: 45,
+          angle: 50,
+          spread: 65,
+          origin: { x: 0.12, y: 0.68 },
+          colors: ['#f59e0b', '#ef4444', '#8b5cf6', '#dc2626', '#f43f5e'],
+          disableForReducedMotion: true,
+        });
+        confetti({
+          particleCount: 45,
+          angle: 130,
+          spread: 65,
+          origin: { x: 0.88, y: 0.68 },
+          colors: ['#f59e0b', '#ef4444', '#8b5cf6', '#dc2626', '#f43f5e'],
+          disableForReducedMotion: true,
+        });
+      }, 250);
+
+      const timer2 = setTimeout(() => {
+        confetti({
+          particleCount: 40,
+          spread: 100,
+          origin: { y: 0.4 },
+          colors: ['#a855f7', '#fbbf24', '#f43f5e', '#ef4444', '#e11d48'],
+          shapes: ['circle', 'square'],
+          disableForReducedMotion: true,
+        });
+      }, 550);
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
+    }
+  }, [isOpen, roundResolution, isInnocentWin]);
+
+  // Ambient floating background particles configuration
+  const ambientParticles = React.useMemo(() => {
+    return Array.from({ length: 18 }).map((_, i) => ({
+      id: i,
+      x: (i * 17 + 7) % 95,
+      y: (i * 23 + 11) % 90,
+      size: (i % 3) + 3,
+      duration: 3 + (i % 4) * 1.5,
+      delay: (i % 6) * 0.4,
+    }));
+  }, []);
 
   return (
     <AnimatePresence>
@@ -53,6 +161,42 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
             }}
             className="relative z-10 retro-card rounded-2xl w-full max-w-xl bg-[#131B2E] border-2 border-slate-700 text-slate-100 p-5 sm:p-7 shadow-2xl space-y-4 my-auto overflow-hidden"
           >
+            {/* Ambient Animated Victory Sparks & Floating Particles */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+              {ambientParticles.map((pt) => (
+                <motion.div
+                  key={pt.id}
+                  className={`absolute rounded-full opacity-60 ${
+                    isInnocentWin
+                      ? pt.id % 2 === 0
+                        ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
+                        : 'bg-amber-300 shadow-[0_0_8px_#fcd34d]'
+                      : pt.id % 2 === 0
+                      ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
+                      : 'bg-purple-400 shadow-[0_0_8px_#c084fc]'
+                  }`}
+                  style={{
+                    left: `${pt.x}%`,
+                    top: `${pt.y}%`,
+                    width: `${pt.size}px`,
+                    height: `${pt.size}px`,
+                  }}
+                  animate={{
+                    y: [0, -40, -80],
+                    x: [0, (pt.id % 2 === 0 ? 1 : -1) * 12, 0],
+                    opacity: [0.1, 0.75, 0],
+                    scale: [0.8, 1.4, 0.4],
+                  }}
+                  transition={{
+                    duration: pt.duration,
+                    repeat: Infinity,
+                    delay: pt.delay,
+                    ease: 'easeInOut',
+                  }}
+                />
+              ))}
+            </div>
+
             {/* Top Close / Inspect Button */}
             {onClose && (
               <button
@@ -65,7 +209,7 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
             )}
 
             {/* Victory Badge & Header */}
-            <div className="text-center pt-1 pb-3 border-b border-slate-700/80">
+            <div className="relative z-1 text-center pt-1 pb-3 border-b border-slate-700/80">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono font-extrabold uppercase tracking-widest mb-2 border shadow-xs">
                 {isInnocentWin ? (
                   <div className="flex items-center gap-1.5 text-emerald-300 border-emerald-500/40 bg-emerald-950/80">
@@ -74,35 +218,35 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5 text-amber-300 border-amber-500/40 bg-amber-950/80">
-                    <span>🦎</span>
-                    <span>Chameleon Wins Round {roundNumber || ''}</span>
+                    <span>🕵️</span>
+                    <span>The Infiltrator Wins Round {roundNumber || ''}</span>
                   </div>
                 )}
               </div>
 
               <h2 className="text-2xl sm:text-4xl font-display font-black tracking-tight text-white uppercase flex items-center justify-center gap-2">
-                <span>{isInnocentWin ? '🏆' : '🦊'}</span>
-                <span>{isInnocentWin ? 'INNOCENTS VICTORIOUS!' : 'CHAMELEON ESCAPED!'}</span>
+                <span>{isInnocentWin ? '🏆' : '🕵️'}</span>
+                <span>{isInnocentWin ? 'INNOCENTS VICTORIOUS!' : 'INFILTRATOR ESCAPED!'}</span>
               </h2>
 
               <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1 font-medium">
                 {roundResolution.reason === 'innocents_caught_fox' &&
-                  'The room correctly sniffed out the Chameleon, and the impostor could not guess the secret word!'}
+                  'The room correctly sniffed out The Infiltrator, and the impostor could not guess the secret word!'}
                 {roundResolution.reason === 'fox_stole_win' &&
-                  'The Chameleon was voted out, but miraculously deduced the secret word to steal the round!'}
+                  'The Infiltrator was voted out, but miraculously deduced the secret word to steal the round!'}
                 {roundResolution.reason === 'fox_escaped_undetected' &&
-                  'The Chameleon successfully blended in unnoticed while someone else took the blame!'}
+                  'The Infiltrator successfully blended in unnoticed while someone else took the blame!'}
               </p>
             </div>
 
-            {/* Secret Word & Chameleon Reveal Card */}
+            {/* Secret Word & Infiltrator Reveal Card */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div className="p-3 rounded-xl bg-slate-900/85 border border-slate-700/80">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-0.5">
-                  The Chameleon
+                  The Infiltrator
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xl select-none">🦎</span>
+                  <span className="text-xl select-none">🕵️</span>
                   <span className="font-display font-black text-amber-300 text-sm sm:text-base">
                     {roundResolution.foxPlayerName}
                   </span>
@@ -125,10 +269,10 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
               </div>
             </div>
 
-            {/* Chameleon Guess info (if applicable) */}
+            {/* Infiltrator Guess info (if applicable) */}
             {roundResolution.foxGuessWord && (
               <div className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between text-xs font-mono">
-                <span className="text-slate-400">Chameleon's Escape Guess:</span>
+                <span className="text-slate-400">Infiltrator's Escape Guess:</span>
                 <span className="font-bold text-amber-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
                   {roundResolution.foxGuessWord}
                 </span>

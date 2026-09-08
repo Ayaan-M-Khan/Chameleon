@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Crosshair, Sparkles, AlertTriangle, Lightbulb } from 'lucide-react';
 import { Category, Coordinate, Player } from '../types';
 
-interface ChameleonGuessModalProps {
+interface InfiltratorGuessModalProps {
   isOpen: boolean;
   category: Category;
   foxPlayerName: string;
@@ -14,7 +14,7 @@ interface ChameleonGuessModalProps {
   onSubmitGuess: () => void;
 }
 
-export const ChameleonGuessModal: React.FC<ChameleonGuessModalProps> = ({
+export const InfiltratorGuessModal: React.FC<InfiltratorGuessModalProps> = ({
   isOpen,
   category,
   foxPlayerName,
@@ -62,16 +62,16 @@ export const ChameleonGuessModal: React.FC<ChameleonGuessModalProps> = ({
             <div className="text-center pb-3 border-b-2 border-slate-700">
               <div className="inline-flex items-center gap-1.5 bg-rose-950/80 text-rose-300 border border-rose-600 px-3 py-1 rounded-full text-xs font-mono font-extrabold uppercase tracking-widest mb-1.5">
                 <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                <span>The Chameleon Was Accused!</span>
+                <span>The Infiltrator Was Accused!</span>
               </div>
 
               <h3 className="font-display font-black text-2xl sm:text-3xl text-white uppercase">
-                Chameleon's Last Stand: Steal The Win
+                The Infiltrator's Last Stand: Steal The Win
               </h3>
               <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1">
                 {isHumanFox
                   ? 'You have one chance to escape! Review the hints given by all players below and guess the secret word (+2 pts)!'
-                  : `${foxPlayerName} (The Chameleon) is attempting to deduce the secret coordinate from everyone's hints...`}
+                  : `${foxPlayerName} (The Infiltrator) is attempting to deduce the secret coordinate from everyone's hints...`}
               </p>
             </div>
 
@@ -105,7 +105,7 @@ export const ChameleonGuessModal: React.FC<ChameleonGuessModalProps> = ({
                           <span className="font-bold text-white text-[11px] truncate">{p.name}</span>
                           {isFox ? (
                             <span className="text-[9px] bg-rose-900 text-rose-300 font-bold px-1 rounded uppercase">
-                              Chameleon (You)
+                              The Infiltrator (You)
                             </span>
                           ) : (
                             <span className="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-700 px-1 rounded font-semibold">
@@ -208,7 +208,7 @@ export const ChameleonGuessModal: React.FC<ChameleonGuessModalProps> = ({
                 </button>
               ) : (
                 <div className="text-xs font-mono font-bold text-amber-400 animate-pulse">
-                  AI Chameleon is deliberating...
+                  AI Infiltrator is deliberating...
                 </div>
               )}
             </div>

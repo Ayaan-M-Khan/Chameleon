@@ -539,15 +539,15 @@ export default function App() {
       if (activeIsChosenFox) {
         sound.powerup();
         setActivePotionToast({
-          message: `🦎 Your gold bribe succeeded! You were chosen as the Chameleon!`,
-          icon: '🦎',
+          message: `🕵️ Your gold bribe succeeded! You were chosen as The Infiltrator!`,
+          icon: '🕵️',
           style: 'amber',
           isChameleonOnly: true,
         });
         setTimeout(() => setActivePotionToast(null), 4500);
       } else {
         setActivePotionToast({
-          message: `🪙 Your Chameleon boost (${Math.floor(activeBoost / 50)} extra tickets) was used this round!`,
+          message: `🪙 Your Infiltrator boost (${Math.floor(activeBoost / 50)} extra tickets) was used this round!`,
           icon: '🪙',
           style: 'amber',
           isChameleonOnly: true,
@@ -659,16 +659,6 @@ export default function App() {
     setPlayers(updated);
     if (gameMode === 'room' && roomId) {
       socketClient.addBot(roomId, newBot);
-      broadcastState(gamePhase, updated);
-    }
-  };
-
-  const handleRemovePlayer = (id: string) => {
-    sound.click();
-    const updated = players.filter((p) => p.id !== id);
-    setPlayers(updated);
-    if (gameMode === 'room' && roomId) {
-      socketClient.removePlayer(roomId, id);
       broadcastState(gamePhase, updated);
     }
   };
@@ -962,6 +952,20 @@ export default function App() {
     broadcastState('voting', finalWithForgedClues);
   };
 
+  // Automatically transition from clues to voting when all remaining players have submitted clues
+  useEffect(() => {
+    if (gamePhase !== 'clue_submission') return;
+    if (isEditingClue) return;
+    if (players.length >= 3 && players.every((p) => p.hasSubmittedClue)) {
+      if (gameMode !== 'room' || isHost) {
+        const timer = setTimeout(() => {
+          transitionToVoting(players);
+        }, 250);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [gamePhase, players, gameMode, isHost, isEditingClue]);
+
   // Human player submits vote
   const handleSubmitVote = () => {
     if (!selectedVoteTargetId) return;
@@ -1126,7 +1130,7 @@ export default function App() {
               "My clue connects directly to the category topic, I assure everyone! 🎯",
               suspect
                 ? `Notice how ${suspect.name}'s clue is super broad? Anyone could guess that without knowing the secret word!`
-                : "The Chameleon is definitely hiding among us.",
+                : "The Infiltrator is definitely hiding among us.",
               "I'm voting based on grid alignment. Trust the clues! 🗺️",
             ];
             msg = phrases[Math.floor(Math.random() * phrases.length)];
@@ -1316,11 +1320,11 @@ export default function App() {
         currentPlayers.forEach((p) => {
           if (p.role === 'innocent') {
             let pts = innocentCatchPts;
-            let expl = `Chameleon caught (+${innocentCatchPts} pts)`;
+            let expl = `Infiltrator caught (+${innocentCatchPts} pts)`;
             // Bonus 1 pt for guessing fox if setting enabled
             if (settings.pointForGuessingFox && p.votedForId === actualFox.id) {
               pts += 1;
-              expl = `Chameleon caught (+${innocentCatchPts} pts) + Correct Chameleon vote bonus (+1 pt)`;
+              expl = `Infiltrator caught (+${innocentCatchPts} pts) + Correct Infiltrator vote bonus (+1 pt)`;
             }
             pointsAwarded[p.id] = { points: pts, explanation: expl };
           }
@@ -1342,7 +1346,7 @@ export default function App() {
         if (p.role === 'innocent' && p.votedForId === actualFox.id && !pointsAwarded[p.id]) {
           pointsAwarded[p.id] = {
             points: 1,
-            explanation: 'Correct Fox accusation bonus (+1 pt)',
+            explanation: 'Correct Infiltrator accusation bonus (+1 pt)',
           };
         }
       });
@@ -1395,10 +1399,103 @@ export default function App() {
     broadcastState('round_resolution', updatedPlayers, resolution);
   };
 
+  // Robust player removal: cleans up clues, votes, active effects, and immediately advances game phase if needed
+  const handleRemovePlayer = (id: string) => {
+    sound.click();
+
+    // 1. Filter out the removed player, and reset any votes that targeted this player
+    const remaining = players
+      .filter((p) => p.id !== id)
+      .map((p) => (p.votedForId === id ? { ...p, votedForId: null } : p));
+
+    // 2. Clear transient potion & peek effects referencing removed player
+    if (impostorPeekPlayerId === id) setImpostorPeekPlayerId(null);
+    if (clueLensPeekPlayerId === id) setClueLensPeekPlayerId(null);
+    if (forgedTargetPlayerId === id) setForgedTargetPlayerId(null);
+    if (pendingClueForged?.targetPlayerId === id) {
+      setPendingClueForged(null);
+      pendingClueForgedRef.current = null;
+    }
+    setActiveVoteShields((prev) => prev.filter((pid) => pid !== id));
+    setSilencedPlayerIds((prev) => prev.filter((pid) => pid !== id));
+
+    // 3. Minimum player constraint: If fewer than 3 players remain during active game
+    if (gamePhase !== 'home' && gamePhase !== 'lobby' && remaining.length < 3) {
+      setPlayers(remaining);
+      setGamePhase('lobby');
+      gamePhaseRef.current = 'lobby';
+      clearBotTimeouts();
+      setIsEditingClue(false);
+      setIsFoxGuessModalOpen(false);
+      setIsResolutionModalOpen(false);
+      alert('A player was removed and fewer than 3 players remain. Returning to the Lobby.');
+      if (gameMode === 'room' && roomId) {
+        socketClient.removePlayer(roomId, id);
+        socketClient.syncState(roomId, { gamePhase: 'lobby', players: remaining });
+        broadcastState('lobby', remaining);
+      }
+      return;
+    }
+
+    // 4. Ensure there is still an Infiltrator/Fox assigned if an active round is ongoing
+    let nextPlayers = remaining;
+    if (gamePhase !== 'home' && gamePhase !== 'lobby' && nextPlayers.length >= 3) {
+      const hasFox = nextPlayers.some((p) => p.role === 'fox');
+      if (!hasFox) {
+        nextPlayers = nextPlayers.map((p, idx) => ({
+          ...p,
+          role: idx === 0 ? 'fox' : 'innocent',
+        }));
+        setFoxPlayerId(nextPlayers[0].id);
+      }
+    }
+
+    setPlayers(nextPlayers);
+
+    if (gameMode === 'room' && roomId) {
+      socketClient.removePlayer(roomId, id);
+      socketClient.syncState(roomId, { players: nextPlayers });
+      broadcastState(gamePhase, nextPlayers);
+    }
+
+    // 5. Clue submission phase:
+    // CRITICAL FIX: If all remaining players have submitted their clues, IMMEDIATELY transition to voting!
+    if (gamePhase === 'clue_submission') {
+      const allSubmitted = nextPlayers.every((p) => p.hasSubmittedClue);
+      if (allSubmitted && nextPlayers.length >= 3) {
+        transitionToVoting(nextPlayers);
+      } else {
+        // Trigger any pending unsubmitted bots so the round does not hang
+        const hasUnsubmittedBots = nextPlayers.some((p) => !p.isHuman && !p.hasSubmittedClue);
+        if (hasUnsubmittedBots && (gameMode !== 'room' || isHost)) {
+          processBotClues(nextPlayers, 1200);
+        }
+      }
+    }
+
+    // 6. Voting phase:
+    // If all remaining players have voted, evaluate tally immediately!
+    if (gamePhase === 'voting') {
+      const allVoted = nextPlayers.every((p) => Boolean(p.votedForId));
+      if (allVoted && nextPlayers.length >= 3) {
+        evaluateVotingTally(nextPlayers);
+      }
+    }
+
+    // 7. Fox guess phase:
+    if (gamePhase === 'fox_guess') {
+      if (caughtChameleonId === id) {
+        setIsFoxGuessModalOpen(false);
+        const actualFox = nextPlayers.find((p) => p.role === 'fox') || nextPlayers[0];
+        resolveRound(false, undefined, nextPlayers, {}, null, actualFox);
+      }
+    }
+  };
+
   // Next round trigger from resolution
   const handleNextRound = () => {
     setIsResolutionModalOpen(false);
-    if (roundNumber % 3 === 0) {
+    if (roundNumber % 3 === 0 && settings.itemsEnabled !== false) {
       setGamePhase('shop');
       gamePhaseRef.current = 'shop';
       if (gameMode === 'room' && roomId) {
@@ -1443,6 +1540,7 @@ export default function App() {
 
   // Use Potion from Inventory Panel
   const handleUsePotion = (potionId: string) => {
+    if (settings.itemsEnabled === false) return;
     if (hasUsedPotionThisTurn) return;
 
     const currentInv = activePlayer.inventory || {};
@@ -1703,7 +1801,7 @@ export default function App() {
     if (isSilenced) {
       sound.click();
       setActivePotionToast({
-        message: `🤐 You are silenced by the Chameleon! You cannot speak during discussion!`,
+        message: `🤐 You are silenced by The Infiltrator! You cannot speak during discussion!`,
         icon: '🤐',
         style: 'purple',
         isChameleonOnly: false,
@@ -2085,6 +2183,9 @@ export default function App() {
                     forgedTargetPlayerId={forgedTargetPlayerId}
                     silencedPlayerIds={silencedPlayerIds}
                     onOpenOddsBooster={() => setIsChameleonBoosterModalOpen(true)}
+                    itemsEnabled={settings.itemsEnabled !== false}
+                    isHost={isHost}
+                    onKickPlayer={handleRemovePlayer}
                   />
                 </div>
 
@@ -2158,7 +2259,7 @@ export default function App() {
       <ChameleonGuessModal
         isOpen={isFoxGuessModalOpen && isCurrentPlayerTheCaughtFox}
         category={category}
-        foxPlayerName={actualFoxPlayer?.name || 'The Chameleon'}
+        foxPlayerName={actualFoxPlayer?.name || 'The Infiltrator'}
         isHumanFox={isCurrentPlayerTheCaughtFox}
         players={players}
         onSelectGuess={(word) => setSelectedGuessWord(word)}
@@ -2236,7 +2337,7 @@ export default function App() {
             Ayaan Khan
           </span>
           <span className="text-slate-500">•</span>
-          <span className="text-slate-400">The Chameleon Social Deduction Game</span>
+          <span className="text-slate-400">The Infiltrator Social Deduction Game</span>
         </p>
       </footer>
     </div>

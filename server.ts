@@ -31,11 +31,52 @@ interface ServerGameSettings {
   turnTimerSeconds: number;
   privateGame: boolean;
   roomPassword?: string;
-  chameleonCount: number;
+  infiltratorCount: number;
+  chameleonCount?: number;
   targetScore: number;
   innocentCatchPoints: number;
-  chameleonEscapePoints: number;
-  chameleonStealPoints: number;
+  infiltratorEscapePoints: number;
+  chameleonEscapePoints?: number;
+  infiltratorStealPoints: number;
+  chameleonStealPoints?: number;
+  itemsEnabled?: boolean;
+}
+
+function cleanupRoomAfterPlayerRemoval(room: ServerRoom, removedPlayerId: string) {
+  // Clean up any votes targeting the removed player
+  room.players = room.players.map((p) =>
+    p.votedForId === removedPlayerId ? { ...p, votedForId: null } : p
+  );
+
+  // If host left, reassign host
+  if (room.hostId === removedPlayerId && room.players.length > 0) {
+    const nextHost = room.players.find((p) => p.isHuman) || room.players[0];
+    if (nextHost) {
+      room.hostId = nextHost.id;
+      nextHost.isHost = true;
+    }
+  }
+
+  // Active game flow checks
+  if (room.gamePhase !== 'home' && room.gamePhase !== 'lobby') {
+    if (room.players.length < 3) {
+      room.gamePhase = 'lobby';
+    } else {
+      // If the removed player was the Infiltrator, assign a new Infiltrator
+      if (room.foxPlayerId === removedPlayerId) {
+        room.foxPlayerId = room.players[0].id;
+        room.players = room.players.map((p, idx) => ({
+          ...p,
+          role: idx === 0 ? 'fox' : 'innocent',
+        }));
+      }
+
+      // If in clue submission and all remaining have submitted, advance to voting immediately
+      if (room.gamePhase === 'clue_submission' && room.players.every((p) => p.hasSubmittedClue)) {
+        room.gamePhase = 'voting';
+      }
+    }
+  }
 }
 
 interface ServerRoom {
@@ -155,6 +196,7 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
       innocentCatchPoints: 2,
       chameleonEscapePoints: 2,
       chameleonStealPoints: 1,
+      itemsEnabled: true,
       roomPassword: password || '',
     };
 
@@ -330,13 +372,7 @@ app.delete('/api/rooms/:roomId/players/:playerId', (req, res) => {
     return res.json({ success: true, message: 'Room closed since all players left' });
   }
 
-  if (room.hostId === playerId) {
-    const nextHost = room.players.find((p) => p.isHuman) || room.players[0];
-    if (nextHost) {
-      room.hostId = nextHost.id;
-      nextHost.isHost = true;
-    }
-  }
+  cleanupRoomAfterPlayerRemoval(room, playerId);
 
   if (isKick) {
     broadcastToRoom(roomId, { type: 'PLAYER_KICKED', kickedPlayerId: playerId, room });
@@ -469,13 +505,7 @@ async function startServer() {
               if (room.players.length === 0) {
                 rooms.delete(roomId);
               } else {
-                if (room.hostId === playerId) {
-                  const nextHost = room.players.find((p) => p.isHuman) || room.players[0];
-                  if (nextHost) {
-                    room.hostId = nextHost.id;
-                    nextHost.isHost = true;
-                  }
-                }
+                cleanupRoomAfterPlayerRemoval(room, playerId);
                 broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
               }
             }
@@ -487,7 +517,12 @@ async function startServer() {
             if (room) {
               room.players = room.players.filter((p) => p.id !== playerId);
               room.lastActive = Date.now();
-              broadcastToRoom(roomId, { type: 'PLAYER_KICKED', kickedPlayerId: playerId, room });
+              if (room.players.length === 0) {
+                rooms.delete(roomId);
+              } else {
+                cleanupRoomAfterPlayerRemoval(room, playerId);
+                broadcastToRoom(roomId, { type: 'PLAYER_KICKED', kickedPlayerId: playerId, room });
+              }
             }
           }
         }
@@ -534,7 +569,7 @@ async function startServer() {
 }
 
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Chameleon Realtime Game Server running on port ${PORT}`);
+    console.log(`The Infiltrator Realtime Game Server running on port ${PORT}`);
   });
 }
 

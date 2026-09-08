@@ -100,9 +100,9 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           {/* Logo brand for Home page */}
           {gamePhase === 'home' && (
             <div className="flex items-center gap-2">
-              <span className="text-xl">🦎</span>
+              <span className="text-xl">🕵️</span>
               <span className="font-display font-black text-sm uppercase tracking-wider text-emerald-400">
-                The Chameleon
+                The Infiltrator
               </span>
             </div>
           )}
@@ -195,7 +195,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         {gamePhase !== 'home' && (
           <div className="hidden md:flex items-center gap-2">
             <div className="flex items-center gap-1.5 bg-emerald-500 text-slate-950 font-black px-2.5 py-0.5 rounded text-xs tracking-wider uppercase border border-slate-900 shadow-xs">
-              🦎 CHAMELEON
+              🕵️ INFILTRATOR
             </div>
             {isInGame && (
               <span className="text-xs font-bold text-slate-200 bg-slate-800 px-2 py-0.5 rounded border border-slate-700 font-mono">
@@ -352,14 +352,14 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             </div>
           )}
 
-          {/* Chameleon Odds Booster Quick Trigger */}
+          {/* Infiltrator Odds Booster Quick Trigger */}
           {isInRoom && onOpenOddsBooster && (
             <button
               onClick={onOpenOddsBooster}
               className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-amber-950/80 hover:bg-amber-900/90 text-amber-300 border border-amber-500/60 shadow-xs cursor-pointer transition-all hover:scale-[1.02]"
-              title="Boost your chances of drawing the Chameleon role in upcoming rounds with gold!"
+              title="Boost your chances of drawing The Infiltrator role in upcoming rounds with gold!"
             >
-              <span className="text-sm select-none">🦎</span>
+              <span className="text-sm select-none">🕵️</span>
               <span className="hidden sm:inline">Odds:</span>
               <span className="text-yellow-300">
                 {myChameleonOdds !== undefined ? `${myChameleonOdds.toFixed(1)}%` : 'Odds'}

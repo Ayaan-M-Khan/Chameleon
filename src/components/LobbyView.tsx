@@ -26,6 +26,7 @@ import {
   ChevronUp,
   Search,
   X,
+  FlaskConical,
 } from 'lucide-react';
 import { Category, GameMode, GameSettings, Player } from '../types';
 import { CATEGORIES } from '../data/categories';
@@ -50,6 +51,7 @@ interface LobbyViewProps {
   isHost?: boolean;
   myPlayerId?: string;
   onOpenOddsBooster?: () => void;
+  onUpdateInfiltratorBoost?: (playerId: string, gold: number) => void;
   onUpdateChameleonBoost?: (playerId: string, gold: number) => void;
 }
 
@@ -71,8 +73,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   isHost = true,
   myPlayerId,
   onOpenOddsBooster,
+  onUpdateInfiltratorBoost,
   onUpdateChameleonBoost,
 }) => {
+  const boostHandler = onUpdateInfiltratorBoost || onUpdateChameleonBoost;
   const [copiedCode, setCopiedCode] = React.useState(false);
   const [copiedInvite, setCopiedInvite] = React.useState(false);
   const canStart = players.length >= 3;
@@ -96,11 +100,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     }
   };
 
-  // Chameleon odds calculation for lobby
+  // Infiltrator odds calculation for lobby
   const selfPlayer = players.find((p) => (myPlayerId ? p.id === myPlayerId : p.isHuman)) || players[0];
   const ticketStats = React.useMemo(() => {
     const list = players.map((p) => {
-      const boostGold = p.chameleonBoostGold ?? 0;
+      const boostGold = p.infiltratorBoostGold ?? p.chameleonBoostGold ?? 0;
       const tickets = 1 + Math.floor(boostGold / 50);
       const isSelf = p.id === selfPlayer?.id;
       return { player: p, tickets, boostGold, isSelf };
@@ -116,7 +120,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const selfStats = ticketStats.find((s) => s.isSelf);
 
   const timerDurations = [30, 45, 60, 90, 120];
-  const targetScores = [5, 8, 10, 15, 0];
 
   const [deckMode, setDeckMode] = React.useState<'random' | 'select_one' | 'select_random'>(() => {
     if (settings.categoryDeckMode) return settings.categoryDeckMode;
@@ -182,10 +185,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         </div>
 
         <h1 className="text-3xl sm:text-5xl font-display font-black tracking-tight text-white uppercase">
-          🦎 THE CHAMELEON
+          🕵️ THE INFILTRATOR
         </h1>
         <p className="max-w-xl mx-auto mt-2 text-sm sm:text-base text-slate-300 font-medium">
-          Find the impostor before they blend in and deduce the secret coordinate. One Chameleon. One 4×4 matrix. One subtle clue per player.
+          Find the impostor before they blend in and deduce the secret coordinate. One Infiltrator. One 4×4 matrix. One subtle clue per player.
         </p>
 
         {/* Selected Game Mode Info Badge & Room Actions */}
@@ -350,17 +353,17 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               })}
             </div>
 
-            {/* Chameleon Role Odds & Gold Booster Section */}
+            {/* Infiltrator Role Odds & Gold Booster Section */}
             <div className="mt-4 p-3.5 rounded-xl bg-slate-900/90 border-2 border-amber-500/50 shadow-md">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl select-none">🦎</span>
+                  <span className="text-xl select-none">🕵️</span>
                   <div>
                     <h3 className="text-xs sm:text-sm font-display font-black uppercase tracking-wider text-amber-300">
-                      Chameleon Role Odds Booster
+                      Infiltrator Role Odds Booster
                     </h3>
                     <p className="text-[10px] text-slate-400 font-mono">
-                      Spend gold to increase your chances of being chosen as Chameleon
+                      Spend gold to increase your chances of being chosen as The Infiltrator
                     </p>
                   </div>
                 </div>
@@ -376,20 +379,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 )}
               </div>
 
-              {/* Probability Bar */}
+              {/* Your Personal Odds Gauge */}
               <div className="w-full h-2.5 rounded-full overflow-hidden bg-slate-950 flex border border-slate-800 my-2">
-                {ticketStats.map((item, idx) => {
-                  const colors = ['bg-emerald-500', 'bg-purple-500', 'bg-amber-500', 'bg-sky-500', 'bg-rose-500'];
-                  const color = item.isSelf ? 'bg-amber-400' : colors[idx % colors.length];
-                  return (
-                    <div
-                      key={item.player.id}
-                      style={{ width: `${item.percentage}%` }}
-                      className={`h-full ${color} transition-all duration-300`}
-                      title={`${item.player.name}: ${item.percentage.toFixed(1)}%`}
-                    />
-                  );
-                })}
+                <div
+                  style={{ width: `${selfStats ? Math.min(100, Math.max(5, selfStats.percentage)) : 25}%` }}
+                  className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-300 rounded-full"
+                />
               </div>
 
               {/* Self Odds Summary and Quick Boost Buttons */}
@@ -403,13 +398,13 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   </span>
                 </div>
 
-                {onUpdateChameleonBoost && selfPlayer && (
+                {boostHandler && selfPlayer && (
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => onUpdateChameleonBoost(selfPlayer.id, 0)}
+                      onClick={() => boostHandler(selfPlayer.id, 0)}
                       className={`px-1.5 py-0.5 rounded text-[10px] border cursor-pointer ${
-                        (selfPlayer.chameleonBoostGold || 0) === 0
+                        (selfPlayer.infiltratorBoostGold ?? selfPlayer.chameleonBoostGold ?? 0) === 0
                           ? 'bg-slate-700 text-white border-slate-500 font-bold'
                           : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
                       }`}
@@ -418,9 +413,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onUpdateChameleonBoost(selfPlayer.id, 50)}
+                      onClick={() => boostHandler(selfPlayer.id, 50)}
                       className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${
-                        selfPlayer.chameleonBoostGold === 50
+                        (selfPlayer.infiltratorBoostGold ?? selfPlayer.chameleonBoostGold) === 50
                           ? 'bg-amber-400 text-slate-950 border-amber-300 font-bold'
                           : 'bg-amber-950/80 text-amber-300 border-amber-600/60 hover:bg-amber-900'
                       }`}
@@ -429,9 +424,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onUpdateChameleonBoost(selfPlayer.id, 100)}
+                      onClick={() => boostHandler(selfPlayer.id, 100)}
                       className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${
-                        selfPlayer.chameleonBoostGold === 100
+                        (selfPlayer.infiltratorBoostGold ?? selfPlayer.chameleonBoostGold) === 100
                           ? 'bg-amber-400 text-slate-950 border-amber-300 font-bold'
                           : 'bg-amber-950/80 text-amber-300 border-amber-600/60 hover:bg-amber-900'
                       }`}
@@ -781,7 +776,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 <span>Quick Rules</span>
               </button>
               <span className="font-mono text-slate-400">
-                {settings.chameleonCount || 1} Chameleon • {settings.turnTimer ? `${settings.turnTimerSeconds || 60}s` : 'No Timer'} • Target: {settings.targetScore === 0 ? '∞ Infinite' : `${settings.targetScore || 5} pts`}
+                {settings.infiltratorCount ?? settings.chameleonCount ?? 1} Infiltrator • {settings.turnTimer ? `${settings.turnTimerSeconds || 60}s` : 'No Timer'} • Target: {settings.targetScore || 5} pts
               </span>
             </div>
           </div>
@@ -800,7 +795,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 Lobby Game Settings
               </h3>
               <p className="text-xs text-slate-400">
-                Adjust the number of chameleons, turn timers, and points
+                Adjust the number of infiltrators, turn timers, and points
               </p>
             </div>
           </div>
@@ -821,40 +816,40 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Setting 1: # of Chameleons */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Setting 1: # of Infiltrators */}
           <div className="bg-slate-900/90 rounded-xl p-3.5 border-2 border-slate-700/80 flex flex-col justify-between space-y-2.5">
             <div>
               <div className="flex items-center justify-between">
                 <span className="font-display font-bold text-xs uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
                   <Users className="w-4 h-4 text-amber-400" />
-                  Chameleons
+                  Infiltrators
                 </span>
                 <span className="text-xs font-mono font-black text-amber-300 bg-slate-800 px-1.5 py-0.5 rounded">
-                  {settings.chameleonCount || 1} {settings.chameleonCount === 2 ? 'Chameleons' : 'Chameleon'}
+                  {(settings.infiltratorCount ?? settings.chameleonCount ?? 1)} {(settings.infiltratorCount ?? settings.chameleonCount ?? 1) === 2 ? 'Infiltrators' : 'Infiltrator'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1">
-                2 chameleons is recommended for 5+ players.
+                2 infiltrators is recommended for 5+ players.
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-1.5">
               {[1, 2].map((count) => {
-                const isSelected = (settings.chameleonCount || 1) === count;
+                const isSelected = (settings.infiltratorCount ?? settings.chameleonCount ?? 1) === count;
                 return (
                   <button
                     key={count}
                     type="button"
                     disabled={!isHost && gameMode === 'room'}
-                    onClick={() => handleSettingChange({ chameleonCount: count })}
+                    onClick={() => handleSettingChange({ infiltratorCount: count, chameleonCount: count })}
                     className={`py-1.5 px-2 rounded-lg font-mono font-extrabold text-xs uppercase tracking-wider text-center transition-all ${
                       isSelected
                         ? 'bg-amber-400 text-slate-950 font-black shadow-xs ring-1 ring-amber-300'
                         : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
                     } ${!isHost && gameMode === 'room' ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
                   >
-                    {count === 1 ? '1 Chameleon' : '2 Chameleons'}
+                    {count === 1 ? '1 Infiltrator' : '2 Infiltrators'}
                   </button>
                 );
               })}
@@ -915,7 +910,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             )}
           </div>
 
-          {/* Setting 3: Points / Scoring */}
+          {/* Setting 3: Custom Points to Win */}
           <div className="bg-slate-900/90 rounded-xl p-3.5 border-2 border-slate-700/80 flex flex-col justify-between space-y-2.5">
             <div>
               <div className="flex items-center justify-between">
@@ -924,33 +919,126 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   Target Points
                 </span>
                 <span className="text-xs font-mono font-black text-amber-300 bg-slate-800 px-1.5 py-0.5 rounded">
-                  {settings.targetScore === 0 ? '∞ Infinite' : `${settings.targetScore || 5} pts to win`}
+                  {settings.targetScore || 5} pts to win
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1">
-                First player to hit score wins match:
+                Custom points to win match:
               </p>
             </div>
 
-            <div className="grid grid-cols-5 gap-1">
-              {targetScores.map((score) => {
-                const isSelected = (settings.targetScore ?? 5) === score;
-                return (
-                  <button
-                    key={score}
-                    type="button"
-                    disabled={!isHost && gameMode === 'room'}
-                    onClick={() => handleSettingChange({ targetScore: score })}
-                    className={`py-1 px-1 rounded font-mono font-extrabold text-[11px] uppercase tracking-wider text-center transition-all ${
-                      isSelected
-                        ? 'bg-amber-400 text-slate-950 font-black ring-1 ring-amber-300'
-                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
-                    } ${!isHost && gameMode === 'room' ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
-                  >
-                    {score === 0 ? '∞ Infn' : `${score} pts`}
-                  </button>
-                );
-              })}
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min="1"
+                  max="999"
+                  disabled={!isHost && gameMode === 'room'}
+                  value={settings.targetScore || 5}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    handleSettingChange({ targetScore: isNaN(val) || val < 1 ? 1 : val });
+                  }}
+                  className="w-full bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-amber-300 outline-none transition-colors disabled:opacity-60"
+                  placeholder="Points (e.g. 10)"
+                />
+                <button
+                  type="button"
+                  disabled={!isHost && gameMode === 'room'}
+                  onClick={() => handleSettingChange({ targetScore: Math.max(1, (settings.targetScore || 5) - 1) })}
+                  className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-mono font-bold flex items-center justify-center cursor-pointer disabled:opacity-50"
+                  title="Decrease"
+                >
+                  -
+                </button>
+                <button
+                  type="button"
+                  disabled={!isHost && gameMode === 'room'}
+                  onClick={() => handleSettingChange({ targetScore: (settings.targetScore || 5) + 1 })}
+                  className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-mono font-bold flex items-center justify-center cursor-pointer disabled:opacity-50"
+                  title="Increase"
+                >
+                  +
+                </button>
+              </div>
+
+              {/* Quick suggestion buttons */}
+              <div className="flex items-center gap-1">
+                {[3, 5, 8, 10, 15].map((score) => {
+                  const isSelected = (settings.targetScore || 5) === score;
+                  return (
+                    <button
+                      key={score}
+                      type="button"
+                      disabled={!isHost && gameMode === 'room'}
+                      onClick={() => handleSettingChange({ targetScore: score })}
+                      className={`flex-1 py-0.5 rounded font-mono font-bold text-[10px] uppercase text-center transition-all ${
+                        isSelected
+                          ? 'bg-amber-400 text-slate-950 font-black'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                      } ${!isHost && gameMode === 'room' ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
+                    >
+                      {score}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Setting 4: In-Game Items & Potions */}
+          <div className="bg-slate-900/90 rounded-xl p-3.5 border-2 border-slate-700/80 flex flex-col justify-between space-y-2.5">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-display font-bold text-xs uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
+                  <FlaskConical className="w-4 h-4 text-purple-400" />
+                  Items & Potions
+                </span>
+                <button
+                  type="button"
+                  disabled={!isHost && gameMode === 'room'}
+                  onClick={() => handleSettingChange({ itemsEnabled: settings.itemsEnabled === false ? true : false })}
+                  className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded transition-all ${
+                    settings.itemsEnabled !== false
+                      ? 'bg-purple-500 text-slate-950'
+                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  } ${!isHost && gameMode === 'room' ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
+                >
+                  {settings.itemsEnabled !== false ? 'ON' : 'OFF'}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {settings.itemsEnabled !== false
+                  ? 'Shop phase active every 3 rounds with tactical potions.'
+                  : 'Pure deduction without items or potion shop.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                disabled={!isHost && gameMode === 'room'}
+                onClick={() => handleSettingChange({ itemsEnabled: true })}
+                className={`py-1.5 px-1 rounded-lg font-mono font-extrabold text-xs uppercase tracking-wider text-center transition-all ${
+                  settings.itemsEnabled !== false
+                    ? 'bg-purple-500 text-slate-950 font-black shadow-xs ring-1 ring-purple-300'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                } ${!isHost && gameMode === 'room' ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
+              >
+                Enabled
+              </button>
+              <button
+                type="button"
+                disabled={!isHost && gameMode === 'room'}
+                onClick={() => handleSettingChange({ itemsEnabled: false })}
+                className={`py-1.5 px-1 rounded-lg font-mono font-extrabold text-xs uppercase tracking-wider text-center transition-all ${
+                  settings.itemsEnabled === false
+                    ? 'bg-rose-500 text-slate-950 font-black shadow-xs ring-1 ring-rose-300'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                } ${!isHost && gameMode === 'room' ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
+              >
+                Disabled
+              </button>
             </div>
           </div>
         </div>
@@ -985,10 +1073,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           </div>
 
           <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-700/60 flex items-center justify-between">
-            <span className="text-slate-300 font-medium">Chameleon Escapes:</span>
+            <span className="text-slate-300 font-medium">Infiltrator Escapes:</span>
             <div className="flex items-center gap-1">
               <span className="font-mono font-bold text-purple-400 mr-1">
-                +{settings.chameleonEscapePoints || 2} pts
+                +{settings.infiltratorEscapePoints ?? settings.chameleonEscapePoints ?? 2} pts
               </span>
               {isHost && (
                 <div className="flex gap-0.5">
@@ -996,9 +1084,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     <button
                       key={val}
                       type="button"
-                      onClick={() => handleSettingChange({ chameleonEscapePoints: val })}
+                      onClick={() => handleSettingChange({ infiltratorEscapePoints: val, chameleonEscapePoints: val })}
                       className={`w-4 h-4 rounded text-[9px] font-mono font-bold flex items-center justify-center cursor-pointer ${
-                        (settings.chameleonEscapePoints || 2) === val
+                        (settings.infiltratorEscapePoints ?? settings.chameleonEscapePoints ?? 2) === val
                           ? 'bg-purple-400 text-slate-950'
                           : 'bg-slate-800 text-slate-400 hover:text-white'
                       }`}
@@ -1015,7 +1103,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             <span className="text-slate-300 font-medium">Caught Word Steal:</span>
             <div className="flex items-center gap-1">
               <span className="font-mono font-bold text-amber-400 mr-1">
-                +{settings.chameleonStealPoints || 1} pts
+                +{settings.infiltratorStealPoints ?? settings.chameleonStealPoints ?? 1} pts
               </span>
               {isHost && (
                 <div className="flex gap-0.5">
@@ -1023,9 +1111,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     <button
                       key={val}
                       type="button"
-                      onClick={() => handleSettingChange({ chameleonStealPoints: val })}
+                      onClick={() => handleSettingChange({ infiltratorStealPoints: val, chameleonStealPoints: val })}
                       className={`w-4 h-4 rounded text-[9px] font-mono font-bold flex items-center justify-center cursor-pointer ${
-                        (settings.chameleonStealPoints || 1) === val
+                        (settings.infiltratorStealPoints ?? settings.chameleonStealPoints ?? 1) === val
                           ? 'bg-amber-400 text-slate-950'
                           : 'bg-slate-800 text-slate-400 hover:text-white'
                       }`}

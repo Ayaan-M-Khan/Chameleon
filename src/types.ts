@@ -22,6 +22,7 @@ export interface Player {
   score: number;
   gold?: number;
   inventory?: PlayerInventory;
+  infiltratorBoostGold?: number;
   chameleonBoostGold?: number;
   isMuted?: boolean;
   role: PlayerRole;
@@ -72,13 +73,17 @@ export interface GameSettings {
   turnTimerSeconds: number;          // Default 60 (e.g. 30, 45, 60, 90, 120)
   privateGame: boolean;              // Private game toggle
   roomPassword?: string;             // Optional room passcode / password
-  chameleonCount: number;            // Number of chameleons (1 or 2, default 1)
+  infiltratorCount: number;          // Number of infiltrators (1 or 2, default 1)
+  chameleonCount?: number;           // Backwards-compat
   targetScore: number;               // Score to win game (default 5, 0 = Infinite / Endless)
-  innocentCatchPoints: number;       // Points awarded to innocents when chameleon caught (default 2)
-  chameleonEscapePoints: number;     // Points awarded to chameleon if escaping undetected (default 2)
-  chameleonStealPoints: number;      // Points awarded to chameleon if guessing word (default 1)
+  innocentCatchPoints: number;       // Points awarded to innocents when infiltrator caught (default 2)
+  infiltratorEscapePoints: number;   // Points awarded to infiltrator if escaping undetected (default 2)
+  chameleonEscapePoints?: number;
+  infiltratorStealPoints: number;    // Points awarded to infiltrator if guessing word (default 1)
+  chameleonStealPoints?: number;
   categoryDeckMode?: 'random' | 'select_one' | 'select_random'; // Category selection strategy
   categoryPool?: string[];           // Selected category IDs for select_random pool
+  itemsEnabled?: boolean;            // Enable or disable in-game items, potion shop, and tactical power-ups (default true)
 }
 
 export type GameMode = 'solo' | 'pass_and_play' | 'room';

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Clock, Bot, User, HelpCircle, Shield, Sparkles, ArrowUpDown, Layers, ArrowUp, ArrowDown, Package } from 'lucide-react';
+import { Check, Clock, Bot, User, HelpCircle, Shield, Sparkles, ArrowUpDown, Layers, ArrowUp, ArrowDown, Package, UserX } from 'lucide-react';
 import { Player, GamePhase, PlayerInventory } from '../types';
 import { POTION_CATALOG } from '../data/potions';
 
@@ -62,6 +62,9 @@ interface LeftColumnTableProps {
   gold?: number;
   pendingClueForged?: { targetPlayerId: string; newClue: string } | null;
   forgedTargetPlayerId?: string | null;
+  itemsEnabled?: boolean;
+  isHost?: boolean;
+  onKickPlayer?: (playerId: string) => void;
 }
 
 export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
@@ -87,6 +90,9 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
   gold = 0,
   pendingClueForged = null,
   forgedTargetPlayerId = null,
+  itemsEnabled = true,
+  isHost = false,
+  onKickPlayer,
 }) => {
   // Navigation tabs: 'players' (main table) vs 'inventory' (dedicated potion inventory tab)
   const [activeTab, setActiveTab] = useState<'players' | 'inventory'>('players');
@@ -217,7 +223,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
         <div className="flex items-center gap-2">
           {gamePhase === 'clue_submission' && isImpostor && (
             <span className="text-[11px] font-bold bg-purple-950 text-purple-300 border border-purple-600 px-2 py-0.5 rounded-md flex items-center gap-1">
-              🦎 Chameleon Intel
+              🕵️ Infiltrator Intel
             </span>
           )}
 
@@ -266,46 +272,48 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
         </div>
       )}
 
-      {/* Navigation Tab Switcher: Players Table vs Inventory Tab */}
-      <div className="flex items-center gap-1.5 p-1 bg-slate-900/90 rounded-lg border border-slate-700/80 mb-3 shrink-0">
-        <button
-          onClick={() => setActiveTab('players')}
-          className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-            activeTab === 'players'
-              ? 'bg-slate-700 text-white shadow-xs border border-slate-600'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-          }`}
-        >
-          <span className="text-sm">📋</span>
-          <span>Players & Clues</span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
-            {players.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('inventory')}
-          className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-            activeTab === 'inventory'
-              ? 'bg-purple-900/90 text-purple-100 shadow-xs border border-purple-500 ring-1 ring-purple-400/40'
-              : 'text-slate-400 hover:text-purple-300 hover:bg-slate-800/60'
-          }`}
-        >
-          <span className="text-sm">🧪</span>
-          <span>Inventory Tab</span>
-          <span
-            className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-              totalPotionsCount > 0
-                ? 'bg-purple-950 text-purple-300 border border-purple-700 font-bold'
-                : 'bg-slate-800 text-slate-400'
+      {/* Navigation Tab Switcher: Players Table vs Inventory Tab (only when items are enabled) */}
+      {itemsEnabled && (
+        <div className="flex items-center gap-1.5 p-1 bg-slate-900/90 rounded-lg border border-slate-700/80 mb-3 shrink-0">
+          <button
+            onClick={() => setActiveTab('players')}
+            className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeTab === 'players'
+                ? 'bg-slate-700 text-white shadow-xs border border-slate-600'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            {totalPotionsCount}
-          </span>
-        </button>
-      </div>
+            <span className="text-sm">📋</span>
+            <span>Players & Clues</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+              {players.length}
+            </span>
+          </button>
 
-      {activeTab === 'inventory' ? (
+          <button
+            onClick={() => setActiveTab('inventory')}
+            className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeTab === 'inventory'
+                ? 'bg-purple-900/90 text-purple-100 shadow-xs border border-purple-500 ring-1 ring-purple-400/40'
+                : 'text-slate-400 hover:text-purple-300 hover:bg-slate-800/60'
+            }`}
+          >
+            <span className="text-sm">🧪</span>
+            <span>Inventory Tab</span>
+            <span
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                totalPotionsCount > 0
+                  ? 'bg-purple-950 text-purple-300 border border-purple-700 font-bold'
+                  : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              {totalPotionsCount}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {itemsEnabled && activeTab === 'inventory' ? (
         /* DEDICATED INVENTORY TAB VIEW */
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
           {/* Inventory Tab Header */}
@@ -327,9 +335,9 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                 <button
                   onClick={onOpenOddsBooster}
                   className="text-[10px] font-bold text-amber-300 hover:text-amber-100 bg-amber-950/80 border border-amber-500/60 px-2 py-0.5 rounded cursor-pointer transition-colors flex items-center gap-1"
-                  title="Boost your chances of drawing the Chameleon role next round using gold"
+                  title="Boost your chances of drawing The Infiltrator role next round using gold"
                 >
-                  <span>🦎 Odds</span>
+                  <span>🕵️ Odds</span>
                 </button>
               )}
               <span className="text-amber-400 font-bold bg-amber-950/80 px-2 py-0.5 rounded border border-amber-600/60">
@@ -383,7 +391,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                             </span>
                             {potion.roleTarget === 'fox' ? (
                               <span className="text-[9px] font-bold bg-purple-950 text-purple-300 border border-purple-700 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                Chameleon Sneaky
+                                Infiltrator Sneaky
                               </span>
                             ) : (
                               <span className="text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-600 px-1.5 py-0.5 rounded uppercase tracking-wider">
@@ -419,7 +427,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
               <span className="text-3xl select-none">🧪</span>
               <span className="font-bold text-slate-300 text-sm">Your potion bag is empty!</span>
               <p className="text-[11px] text-slate-400 max-w-xs">
-                Earn gold by surviving rounds, catching the Chameleon, or guessing clues. The Potion Shop opens every 3 rounds!
+                Earn gold by surviving rounds, catching The Infiltrator, or guessing clues. The Potion Shop opens every 3 rounds!
               </p>
               <span className="mt-1 text-[11px] font-mono text-amber-300 font-bold bg-amber-950/70 border border-amber-700/60 px-2 py-1 rounded">
                 Current Gold: 🪙 {gold}g
@@ -475,7 +483,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
               // 1. Voting/Resolution: all clues are 100% public to all players!
               // 2. Clue submission:
               //    - Current active player always sees their own clue
-              //    - Imposter (Chameleon) sees exactly ONE other player's clue at random (+ 2nd clue if Clue Lens active)
+              //    - Imposter (Infiltrator) sees exactly ONE other player's clue at random (+ 2nd clue if Clue Lens active)
               //    - Innocents see NO other players' clues
               const isClueVisible =
                 isVotingOrResolution ||
@@ -490,10 +498,10 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
               const isSilenced = silencedPlayerIds?.includes(p.id);
 
               // Strict Sneaky rule:
-              // Chameleon potion visuals ONLY appear for the Chameleon themselves!
-              // Innocent potion visuals appear for EVERYONE including the Chameleon!
+              // Infiltrator potion visuals ONLY appear for the Infiltrator themselves!
+              // Innocent potion visuals appear for EVERYONE including the Infiltrator!
               const isTargetOfPotionEffect = recentlyUsedPotionPlayerId === p.id;
-              const isChameleonPotion =
+              const isInfiltratorPotion =
                 recentlyUsedPotionId === 'oracle_serum' ||
                 recentlyUsedPotionId === 'ink_of_deceit' ||
                 recentlyUsedPotionId === 'silence_curse' ||
@@ -501,7 +509,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
 
               const shouldShowPotionEffect =
                 isTargetOfPotionEffect &&
-                (!isChameleonPotion || (isImpostor && p.id === activePlayerId));
+                (!isInfiltratorPotion || (isImpostor && p.id === activePlayerId));
 
               // Select tailored animation class based on potion type
               const potionAnimationClass = shouldShowPotionEffect
@@ -545,7 +553,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                           {isSilenced && (
                             <span
                               className="text-[10px] bg-rose-950/90 text-rose-300 border border-rose-600/80 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-0.5 shrink-0 animate-pulse"
-                              title="Silenced by Chameleon's Elixir of Silence! Clue is still active on board, but cannot speak during discussion."
+                              title="Silenced by Infiltrator's Elixir of Silence! Clue is still active on board, but cannot speak during discussion."
                             >
                               🤐 MUTED
                             </span>
@@ -565,7 +573,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                               👁️ Lens Peek!
                             </span>
                           )}
-                          {shouldShowPotionEffect && isChameleonPotion && isImpostor && p.id === activePlayerId && (
+                          {shouldShowPotionEffect && isInfiltratorPotion && isImpostor && p.id === activePlayerId && (
                             <span className="text-[10px] bg-purple-900/90 text-purple-200 border border-purple-400 px-1.5 py-0.5 rounded font-mono font-bold flex items-center gap-1 animate-pulse shrink-0">
                               🧪 Covert Action
                             </span>
@@ -614,7 +622,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                           "{p.clue}"
                           {isImpostorPeekTarget && gamePhase === 'clue_submission' && (
                             <span className="block mt-1 text-[10px] font-sans font-extrabold uppercase tracking-wider text-purple-300">
-                              🦎 Chameleon Intel (1 Clue)
+                              🕵️ Infiltrator Intel (1 Clue)
                             </span>
                           )}
                           {isClueLensTarget && gamePhase === 'clue_submission' && (
@@ -642,7 +650,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                       </div>
                     )}
 
-                    {/* Chameleon sneaky preview of planned forgery during clue submission */}
+                    {/* Infiltrator sneaky preview of planned forgery during clue submission */}
                     {isImpostor && pendingClueForged?.targetPlayerId === p.id && gamePhase === 'clue_submission' && (
                       <div className="mt-1.5 p-1.5 bg-purple-950/90 border border-purple-400/80 rounded-lg text-[10px] text-purple-200 font-mono shadow-xs">
                         <span className="font-extrabold text-purple-300 flex items-center gap-1">
@@ -714,9 +722,26 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                               ? 'bg-rose-600 text-white border-rose-400 shadow-md ring-1 ring-rose-300'
                               : 'bg-slate-800 hover:bg-rose-950 text-slate-200 border-slate-600 hover:border-rose-500'
                           }`}
-                          title={`Select ${p.name} as Chameleon accusation`}
+                          title={`Select ${p.name} as Infiltrator accusation`}
                         >
                           {isSelectedTarget ? 'Selected' : 'Accuse'}
+                        </button>
+                      )}
+
+                      {/* Host can kick / remove player from the game directly */}
+                      {isHost && p.id !== activePlayerId && onKickPlayer && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Remove ${p.name} from the game?`)) {
+                              onKickPlayer(p.id);
+                            }
+                          }}
+                          className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/50 transition-colors cursor-pointer shrink-0"
+                          title={`Remove ${p.name} from game`}
+                        >
+                          <UserX className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
@@ -729,6 +754,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
       </div>
 
           {/* 🧪 POTIONS & ITEMS (1 use per turn) - Quick Panel at bottom of table */}
+          {itemsEnabled && (
           <div className="mt-3 pt-3 border-t-2 border-slate-700/80 shrink-0">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
@@ -826,6 +852,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
               </div>
             )}
           </div>
+          )}
 
           {/* Footer Info Pill */}
           <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 shrink-0">

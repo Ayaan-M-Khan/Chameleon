@@ -18,7 +18,7 @@ export const ClueForgeryModal: React.FC<ClueForgeryModalProps> = ({
   onConfirmForgery,
   onClose,
 }) => {
-  // Targetable candidates: all players except active player (the Chameleon)
+  // Targetable candidates: all players except active player (the Infiltrator)
   const candidatePlayers = players.filter((p) => p.id !== activePlayerId);
   const [selectedTargetId, setSelectedTargetId] = useState<string>(candidatePlayers[0]?.id || '');
   const [forgedClue, setForgedClue] = useState<string>('');

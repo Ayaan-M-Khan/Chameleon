@@ -72,10 +72,10 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
           <div className="rounded-lg border-2 border-rose-600 bg-rose-950/80 text-white p-3 shadow-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-2xl animate-bounce">🦎</span>
+                <span className="text-2xl animate-bounce">🕵️</span>
                 <div>
                   <h3 className="font-display font-black text-sm sm:text-base uppercase tracking-tight text-yellow-300">
-                    You are the CHAMELEON! Blend in.
+                    You are THE INFILTRATOR! Blend in.
                   </h3>
                   <p className="text-xs text-rose-200 font-medium">
                     You do NOT know the secret coordinate. Listen to other players' clues, sound convincing, and avoid being voted out!
@@ -139,7 +139,7 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
           <div className="flex items-center gap-2">
             <Crosshair className="w-4 h-4 text-amber-400" />
             <span className="text-xs font-bold">
-              The Chameleon was caught! Select the secret tile on the matrix to escape:
+              The Infiltrator was caught! Select the secret tile on the matrix to escape:
             </span>
           </div>
           {selectedGuessWord && (
@@ -150,7 +150,7 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
         </div>
       )}
 
-      {/* Active Potion Status Banner (Chameleon Eyes Only) */}
+      {/* Active Potion Status Banner (Infiltrator Eyes Only) */}
       {oracleHighlight && isFox && (
         <div className="mb-3 p-2 bg-purple-950/80 border-2 border-purple-500/80 rounded-lg text-purple-200 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2">
@@ -168,7 +168,7 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
         </div>
       )}
 
-      {/* Oracle Shattered by Scrambler Banner - Chameleon Eyes */}
+      {/* Oracle Shattered by Scrambler Banner - Infiltrator Eyes */}
       {oracleShattered && isFox && (
         <div className="mb-3 p-2.5 bg-rose-950/95 border-2 border-rose-500 rounded-lg text-rose-200 flex items-center justify-between shadow-lg animate-pulse">
           <div className="flex items-center gap-2">
