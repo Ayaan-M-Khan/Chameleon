@@ -4,7 +4,9 @@
 
 class SoundFX {
   private ctx: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
   public enabled: boolean = true;
+  public volume: number = 0.7;
 
   private getContext(): AudioContext | null {
     if (!this.enabled) return null;
@@ -13,12 +15,22 @@ class SoundFX {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = this.volume;
+        this.masterGain.connect(this.ctx.destination);
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
     return this.ctx;
+  }
+
+  setVolume(volume: number) {
+    this.volume = Math.max(0, Math.min(1, volume));
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.01);
+    }
   }
 
   // Soft wooden click / tap
@@ -36,7 +48,7 @@ class SoundFX {
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.masterGain || ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.05);
     } catch {
@@ -60,7 +72,7 @@ class SoundFX {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.3);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + idx * 0.06);
         osc.stop(now + idx * 0.06 + 0.3);
       });
@@ -85,7 +97,7 @@ class SoundFX {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now);
         osc.stop(now + 0.5);
       });
@@ -111,7 +123,7 @@ class SoundFX {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.4);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + idx * 0.1);
         osc.stop(now + idx * 0.1 + 0.4);
       });
@@ -136,7 +148,7 @@ class SoundFX {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.masterGain || ctx.destination);
       osc.start(now);
       osc.stop(now + 0.35);
     } catch {
@@ -158,7 +170,7 @@ class SoundFX {
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.masterGain || ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.03);
     } catch {
@@ -184,7 +196,7 @@ class SoundFX {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.045 + 0.15);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + idx * 0.045);
         osc.stop(now + idx * 0.045 + 0.15);
       });
@@ -209,7 +221,7 @@ class SoundFX {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.28);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + idx * 0.04);
         osc.stop(now + idx * 0.04 + 0.28);
       });
@@ -241,7 +253,7 @@ class SoundFX {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.025 + 0.35);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + idx * 0.025);
         osc.stop(now + idx * 0.025 + 0.35);
       });
@@ -266,7 +278,7 @@ class SoundFX {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.masterGain || ctx.destination);
       osc.start(now);
       osc.stop(now + 0.38);
     } catch {
@@ -290,7 +302,7 @@ class SoundFX {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.18);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + idx * 0.05);
         osc.stop(now + idx * 0.05 + 0.18);
       });
@@ -314,7 +326,7 @@ class SoundFX {
       subGain.gain.setValueAtTime(0.18, now);
       subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
       subOsc.connect(subGain);
-      subGain.connect(ctx.destination);
+      subGain.connect(this.masterGain || ctx.destination);
       subOsc.start(now);
       subOsc.stop(now + 0.45);
 
@@ -330,7 +342,7 @@ class SoundFX {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + 0.08);
         osc.stop(now + 0.55);
       });
@@ -356,7 +368,7 @@ class SoundFX {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.masterGain || ctx.destination);
       osc.start(now);
       osc.stop(now + 0.14);
 
@@ -368,7 +380,7 @@ class SoundFX {
       tickGain.gain.setValueAtTime(0.08, now + 0.05);
       tickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
       tick.connect(tickGain);
-      tickGain.connect(ctx.destination);
+      tickGain.connect(this.masterGain || ctx.destination);
       tick.start(now + 0.05);
       tick.stop(now + 0.18);
     } catch {
@@ -394,7 +406,7 @@ class SoundFX {
         gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.25);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + offset);
         osc.stop(now + offset + 0.25);
       });
@@ -423,7 +435,7 @@ class SoundFX {
           gain.gain.setValueAtTime(0.09, now + idx * 0.04);
           gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.3);
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(this.masterGain || ctx.destination);
           osc.start(now + idx * 0.04);
           osc.stop(now + idx * 0.04 + 0.3);
         });
@@ -437,7 +449,7 @@ class SoundFX {
           gain.gain.setValueAtTime(0.12 / (idx + 1), now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(this.masterGain || ctx.destination);
           osc.start(now);
           osc.stop(now + 0.35);
         });
@@ -451,7 +463,7 @@ class SoundFX {
           gain.gain.setValueAtTime(0.08, now + idx * 0.06);
           gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.25);
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(this.masterGain || ctx.destination);
           osc.start(now + idx * 0.06);
           osc.stop(now + idx * 0.06 + 0.25);
         });
@@ -488,7 +500,7 @@ class SoundFX {
         gain.gain.setValueAtTime(0.12, now + n.t);
         gain.gain.exponentialRampToValueAtTime(0.001, now + n.t + n.d);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + n.t);
         osc.stop(now + n.t + n.d);
       });
@@ -518,7 +530,7 @@ class SoundFX {
         gain.gain.setValueAtTime(0.09, now + n.t);
         gain.gain.exponentialRampToValueAtTime(0.001, now + n.t + n.d);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + n.t);
         osc.stop(now + n.t + n.d);
       });
@@ -549,7 +561,7 @@ class SoundFX {
         gain.gain.setValueAtTime(0.12, now + n.t);
         gain.gain.exponentialRampToValueAtTime(0.001, now + n.t + n.d);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + n.t);
         osc.stop(now + n.t + n.d);
       });
@@ -572,7 +584,7 @@ class SoundFX {
         gain.gain.setValueAtTime(0.1, now + idx * 0.08);
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.masterGain || ctx.destination);
         osc.start(now + idx * 0.08);
         osc.stop(now + idx * 0.08 + 0.25);
       });
@@ -595,7 +607,7 @@ class SoundFX {
       gain.gain.setValueAtTime(0.1, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.masterGain || ctx.destination);
       osc.start(now);
       osc.stop(now + 0.4);
     } catch {

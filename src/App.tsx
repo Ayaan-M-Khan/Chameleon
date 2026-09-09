@@ -202,6 +202,9 @@ export default function App() {
     roomPassword: inviteInfo.password || '',
   }));
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [volume, setVolume] = useState(0.7);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [compactDisplay, setCompactDisplay] = useState(false);
 
   // Active inputs
   const [clueInput, setClueInput] = useState('');
@@ -306,7 +309,8 @@ export default function App() {
   // Sync sound utility with state
   useEffect(() => {
     sound.enabled = soundEnabled;
-  }, [soundEnabled]);
+    sound.setVolume(volume);
+  }, [soundEnabled, volume]);
 
   // Sync room in URL hash only when a valid room exists, otherwise keep URL clean
   useEffect(() => {
@@ -2404,8 +2408,14 @@ export default function App() {
       <OptionsModal
         isOpen={isOptionsOpen}
         onClose={() => setIsOptionsOpen(false)}
-        settings={settings}
-        onUpdateSettings={handleUpdateSettings}
+        soundEnabled={soundEnabled}
+        onToggleSound={() => setSoundEnabled((enabled) => !enabled)}
+        volume={volume}
+        onChangeVolume={setVolume}
+        reducedMotion={reducedMotion}
+        onToggleReducedMotion={() => setReducedMotion((enabled) => !enabled)}
+        compactDisplay={compactDisplay}
+        onToggleCompactDisplay={() => setCompactDisplay((enabled) => !enabled)}
       />
 
       {/* RULES MODAL */}
