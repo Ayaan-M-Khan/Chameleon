@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Award, ArrowRight, Eye, RefreshCw, X, ShieldAlert, CheckCircle2, Sparkles, Flame } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -30,14 +30,16 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
   gameMode = 'solo',
   activePlayerId,
 }) => {
-  if (!roundResolution) return null;
-
-  const isInnocentWin = roundResolution.winner === 'innocents';
+  const isInnocentWin = roundResolution?.winner === 'innocents';
   const activePlayer = players.find((player) => player.id === activePlayerId);
   const playerWon = activePlayer
     ? (isInnocentWin ? activePlayer.role === 'innocent' : activePlayer.role === 'fox')
     : true;
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+  const celebrationKey = roundResolution
+    ? `${roundNumber ?? 'unknown'}:${roundResolution.foxPlayerId}:${roundResolution.targetCoordinate}`
+    : null;
+  const celebratedKeyRef = useRef<string | null>(null);
 
   // Trigger celebration confetti, particle animation, & fanfare audio based on winner
   useEffect(() => {
@@ -45,6 +47,13 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
       confetti.reset();
       return;
     }
+
+    // A room-state sync can recreate the resolution object while the same
+    // results screen is open. Celebrate each round only once.
+    if (celebrationKey && celebratedKeyRef.current === celebrationKey) {
+      return;
+    }
+    celebratedKeyRef.current = celebrationKey;
 
     if (isInnocentWin && playerWon) {
       // Audio Fanfare
@@ -145,7 +154,7 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
         confetti.reset();
       };
     }
-  }, [isOpen, roundResolution, isInnocentWin, playerWon]);
+  }, [isOpen, celebrationKey, isInnocentWin, playerWon]);
 
   // Ambient floating background particles configuration (Emerald/Gold vs Crimson/Purple)
   const ambientParticles = React.useMemo(() => {
@@ -158,6 +167,8 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
       delay: (i % 6) * 0.35,
     }));
   }, []);
+
+  if (!roundResolution) return null;
 
   return (
     <AnimatePresence>
