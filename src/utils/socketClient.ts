@@ -75,6 +75,10 @@ class RealtimeSocketClient {
         savedAt: Date.now(),
       };
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+      // Store individual credentials requested for automatic session restoration
+      sessionStorage.setItem('fox_room_id', roomId);
+      sessionStorage.setItem('fox_player_id', player.id);
+      if (player.name) sessionStorage.setItem('fox_player_name', player.name);
       return token;
     } catch (e) {
       console.warn('Failed to save session to sessionStorage:', e);
@@ -86,6 +90,9 @@ class RealtimeSocketClient {
     if (typeof window === 'undefined') return;
     try {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      sessionStorage.removeItem('fox_room_id');
+      sessionStorage.removeItem('fox_player_id');
+      sessionStorage.removeItem('fox_player_name');
     } catch (e) {}
     this.sessionToken = '';
     this.isReconnectingSession = false;
@@ -199,9 +206,10 @@ class RealtimeSocketClient {
     if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) return;
     this.isConnecting = true;
     this.setConnectionState(this.reconnectAttempts > 0 ? 'reconnecting' : 'connecting');
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws?roomId=${encodeURIComponent(this.roomId)}&playerId=${encodeURIComponent(
+    const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const wsProtocol = isSecure ? 'wss:' : 'ws:';
+    const host = typeof window !== 'undefined' ? window.location.host : 'localhost:3000';
+    const wsUrl = `${wsProtocol}//${host}/ws?roomId=${encodeURIComponent(this.roomId)}&playerId=${encodeURIComponent(
       this.playerId
     )}`;
 
@@ -214,12 +222,25 @@ class RealtimeSocketClient {
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.setConnectionState('connected');
-        // If reconnecting an existing session or socket dropped and reconnecting
-        if (this.isReconnectingSession || (this.sessionToken && this.reconnectAttempts > 0)) {
+
+        // Check sessionStorage for stored session credentials
+        const savedRoomId = typeof window !== 'undefined'
+          ? (sessionStorage.getItem('fox_room_id') || sessionStorage.getItem('infiltrator_room_id') || this.roomId)
+          : this.roomId;
+        const savedPlayerId = typeof window !== 'undefined'
+          ? (sessionStorage.getItem('fox_player_id') || sessionStorage.getItem('infiltrator_player_id') || this.playerId)
+          : this.playerId;
+        const savedPlayerName = typeof window !== 'undefined'
+          ? (sessionStorage.getItem('fox_player_name') || sessionStorage.getItem('infiltrator_player_name') || this.player?.name || 'Player')
+          : (this.player?.name || 'Player');
+
+        // Automatic session restoration or rejoin
+        if (this.isReconnectingSession || (this.sessionToken && this.reconnectAttempts > 0) || (savedRoomId && savedPlayerId)) {
           this.send({
             type: 'RECONNECT_SESSION',
-            roomId: this.roomId,
-            playerId: this.playerId,
+            roomId: savedRoomId || this.roomId,
+            playerId: savedPlayerId || this.playerId,
+            playerName: savedPlayerName,
             sessionToken: this.sessionToken,
           });
           this.isReconnectingSession = false;
@@ -236,7 +257,7 @@ class RealtimeSocketClient {
           });
         }
 
-        // Start ping heartbeat every 20s
+        // Start client keepalive ping interval every 20s if WebSocket is open
         if (this.pingInterval) clearInterval(this.pingInterval);
         this.pingInterval = setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) {
@@ -292,10 +313,7 @@ class RealtimeSocketClient {
 
   private scheduleReconnect() {
     if (this.isManualDisconnect || !this.roomId || this.reconnectTimeout) return;
-    const delay = Math.min(
-      this.reconnectMaxDelay,
-      this.reconnectBaseDelay * Math.pow(2, this.reconnectAttempts)
-    );
+    const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 10000);
     this.reconnectAttempts += 1;
     this.setConnectionState('reconnecting');
     this.reconnectTimeout = setTimeout(() => {

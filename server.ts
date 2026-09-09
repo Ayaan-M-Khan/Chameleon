@@ -526,6 +526,10 @@ async function startServer() {
         }
 
         if (data.type === 'PING') {
+          if (meta.roomId) {
+            const r = rooms.get(meta.roomId);
+            if (r) r.lastActive = Date.now();
+          }
           ws.send(JSON.stringify({ type: 'PONG' }));
           return;
         }
@@ -534,6 +538,11 @@ async function startServer() {
           const { roomId, player, password } = data;
           meta.roomId = roomId;
           meta.playerId = player?.id;
+
+          if (!roomSubscriptions.has(roomId)) {
+            roomSubscriptions.set(roomId, new Set());
+          }
+          roomSubscriptions.get(roomId)!.add(ws);
 
           let room = rooms.get(roomId);
           if (!room) {
@@ -603,6 +612,11 @@ async function startServer() {
           const { roomId, playerId, sessionToken } = data;
           meta.roomId = roomId;
           meta.playerId = playerId;
+
+          if (!roomSubscriptions.has(roomId)) {
+            roomSubscriptions.set(roomId, new Set());
+          }
+          roomSubscriptions.get(roomId)!.add(ws);
 
           const room = rooms.get(roomId);
           if (!room) {
@@ -708,6 +722,9 @@ async function startServer() {
     ws.on('close', () => {
       const closedMeta = clients.get(ws);
       clients.delete(ws);
+      if (closedMeta?.roomId && roomSubscriptions.has(closedMeta.roomId)) {
+        roomSubscriptions.get(closedMeta.roomId)!.delete(ws);
+      }
       if (!closedMeta?.roomId || !closedMeta.playerId) return;
 
       const { roomId, playerId } = closedMeta;
