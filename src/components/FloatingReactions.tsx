@@ -1,7 +1,7 @@
 import React from 'react';
 import { EmojiReaction } from '../types';
 
-export const REACTION_EMOJIS = ['😂', '😱', '🧐', '👏', '🔥', '🤨'];
+export const REACTION_EMOJIS = ['🤨', '🚨', '🦎', '💀', '👏'];
 
 interface FloatingReactionsProps {
   reactions: EmojiReaction[];

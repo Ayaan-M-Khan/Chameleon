@@ -185,7 +185,7 @@ class RealtimeSocketClient {
 
   public sendReaction(roomId: string, playerId: string, emoji: string) {
     this.send({
-      type: 'REACTION',
+      type: 'EMOJI_REACTION',
       roomId,
       playerId,
       emoji,

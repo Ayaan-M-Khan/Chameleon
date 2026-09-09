@@ -408,7 +408,7 @@ export default function App() {
         if (event.room.roundNumber !== undefined) setRoundNumber(event.room.roundNumber);
         if (event.room.voteRound !== undefined) setVoteRound(event.room.voteRound);
         if (event.room.suddenDeath !== undefined) setSuddenDeath(Boolean(event.room.suddenDeath));
-      } else if (event.type === 'REACTION' && event.reaction) {
+      } else if (event.type === 'EMOJI_REACTION' && event.reaction) {
         if (!roomIdRef.current) return;
         const reaction = event.reaction as EmojiReaction;
         if (!REACTION_EMOJIS.includes(reaction.emoji)) return;

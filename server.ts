@@ -563,16 +563,16 @@ async function startServer() {
               broadcastToRoom(roomId, { type: 'ROOM_SETTINGS_UPDATED', settings: room.settings, room });
             }
           }
-        } else if (data.type === 'REACTION') {
+        } else if (data.type === 'EMOJI_REACTION') {
           const { roomId, playerId, emoji } = data;
-          const allowedEmojis = new Set(['😂', '😱', '🧐', '👏', '🔥', '🤨']);
+          const allowedEmojis = new Set(['🤨', '🚨', '🦎', '💀', '👏']);
           if (roomId === meta.roomId && playerId === meta.playerId && allowedEmojis.has(emoji)) {
             const room = rooms.get(roomId);
             const sender = room?.players.find((p) => p.id === playerId);
             if (room && sender) {
               room.lastActive = Date.now();
               broadcastToRoom(roomId, {
-                type: 'REACTION',
+                type: 'EMOJI_REACTION',
                 reaction: {
                   id: `reaction-${Date.now()}-${playerId}`,
                   playerId,
