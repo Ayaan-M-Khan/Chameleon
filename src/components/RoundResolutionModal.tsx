@@ -15,6 +15,7 @@ interface RoundResolutionModalProps {
   targetScore?: number;
   isHost?: boolean;
   gameMode?: string;
+  activePlayerId?: string;
 }
 
 export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
@@ -27,10 +28,15 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
   targetScore = 5,
   isHost = true,
   gameMode = 'solo',
+  activePlayerId,
 }) => {
   if (!roundResolution) return null;
 
   const isInnocentWin = roundResolution.winner === 'innocents';
+  const activePlayer = players.find((player) => player.id === activePlayerId);
+  const playerWon = activePlayer
+    ? (isInnocentWin ? activePlayer.role === 'innocent' : activePlayer.role === 'fox')
+    : true;
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   // Trigger celebration confetti, particle animation, & fanfare audio based on winner
@@ -40,7 +46,7 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
       return;
     }
 
-    if (isInnocentWin) {
+    if (isInnocentWin && playerWon) {
       // Audio Fanfare
       sound.celebrateInnocents();
 
@@ -88,6 +94,8 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
         clearTimeout(timer2);
         confetti.reset();
       };
+    } else if (!playerWon) {
+      sound.caught();
     } else {
       // Audio Stealth Victory
       sound.celebrateInfiltrator();
@@ -137,7 +145,7 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
         confetti.reset();
       };
     }
-  }, [isOpen, roundResolution, isInnocentWin]);
+  }, [isOpen, roundResolution, isInnocentWin, playerWon]);
 
   // Ambient floating background particles configuration (Emerald/Gold vs Crimson/Purple)
   const ambientParticles = React.useMemo(() => {
@@ -250,6 +258,13 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
 
             {/* Victory Badge & Header */}
             <div className="relative z-1 text-center pt-1 pb-3 border-b border-slate-700/80">
+              <div className={`inline-flex items-center justify-center gap-2 px-3 py-1 rounded-full text-[11px] font-mono font-black uppercase tracking-widest mb-3 border ${
+                playerWon
+                  ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/70'
+                  : 'bg-rose-950/90 text-rose-300 border-rose-500/70'
+              }`}>
+                <span>{playerWon ? '✨ YOUR SIDE WINS' : '💥 YOUR SIDE LOST'}</span>
+              </div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono font-extrabold uppercase tracking-widest mb-2 border shadow-xs">
                 {isInnocentWin ? (
                   <div className="flex items-center gap-1.5 text-emerald-300 border-emerald-500/40 bg-emerald-950/80">
@@ -287,7 +302,7 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-xl select-none">🕵️</span>
-                  <span className="font-display font-black text-amber-300 text-sm sm:text-base">
+                  <span className="font-display font-black text-amber-300 text-sm sm:text-base break-words [overflow-wrap:anywhere] max-w-[180px]">
                     {roundResolution.foxPlayerName}
                   </span>
                 </div>
@@ -340,7 +355,7 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="text-base select-none">{player.avatar || '👤'}</span>
                         <div className="min-w-0">
-                          <span className="font-bold text-white truncate block">{player.name}</span>
+                          <span className="font-bold text-white break-words [overflow-wrap:anywhere] block max-w-[150px]">{player.name}</span>
                           <span className="text-[10px] text-slate-400 truncate block leading-tight">
                             {info.explanation}
                           </span>
@@ -377,7 +392,7 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm">{sortedPlayers[0]?.avatar}</span>
-                <span className="font-bold text-white">{sortedPlayers[0]?.name}</span>
+                <span className="font-bold text-white break-words [overflow-wrap:anywhere] max-w-[140px] text-right">{sortedPlayers[0]?.name}</span>
                 <span className="font-mono font-black text-emerald-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">
                   {sortedPlayers[0]?.score} pts
                 </span>
@@ -393,7 +408,7 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
                     <div key={`${playerId}-${badge}`} className="p-3 rounded-xl bg-gradient-to-br from-amber-950/90 via-purple-950/80 to-slate-900 border border-amber-400/80 shadow-[0_0_18px_rgba(251,191,36,0.35)]">
                       <div className="text-[10px] font-mono uppercase tracking-widest text-amber-300">Match Accolade</div>
                       <div className="font-display font-black text-white mt-1">{badge}</div>
-                      <div className="text-[11px] text-slate-300 mt-1 truncate">{player?.name}</div>
+                      <div className="text-[11px] text-slate-300 mt-1 break-words [overflow-wrap:anywhere]">{player?.name}</div>
                     </div>
                   ));
                 })}

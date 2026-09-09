@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Clock, Bot, User, HelpCircle, Shield, Sparkles, ArrowUpDown, Layers, ArrowUp, ArrowDown, Package, UserX, Wand2 } from 'lucide-react';
+import { Check, Clock, Bot, User, HelpCircle, Shield, Sparkles, ArrowUpDown, Layers, ArrowUp, ArrowDown, Package, Wand2 } from 'lucide-react';
 import { Player, GamePhase, PlayerInventory } from '../types';
 import { POTION_CATALOG } from '../data/potions';
 import { sound } from '../utils/sound';
@@ -50,9 +50,6 @@ interface LeftColumnTableProps {
   silencedPlayerIds?: string[];
   gamePhase: GamePhase;
   anonymousVoting: boolean;
-  onSelectVoteTarget?: (targetId: string) => void;
-  selectedVoteTargetId?: string | null;
-  canVoteNow: boolean;
   hasUsedPotionThisTurn?: boolean;
   onUsePotion?: (potionId: string) => void;
   onOpenOddsBooster?: () => void;
@@ -64,8 +61,6 @@ interface LeftColumnTableProps {
   pendingClueForged?: { targetPlayerId: string; newClue: string } | null;
   forgedTargetPlayerId?: string | null;
   itemsEnabled?: boolean;
-  isHost?: boolean;
-  onKickPlayer?: (playerId: string) => void;
 }
 
 export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
@@ -78,9 +73,6 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
   silencedPlayerIds = [],
   gamePhase,
   anonymousVoting,
-  onSelectVoteTarget,
-  selectedVoteTargetId,
-  canVoteNow,
   hasUsedPotionThisTurn = false,
   onUsePotion,
   onOpenOddsBooster,
@@ -92,8 +84,6 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
   pendingClueForged = null,
   forgedTargetPlayerId = null,
   itemsEnabled = true,
-  isHost = false,
-  onKickPlayer,
 }) => {
   // Navigation tabs: 'players' (main table) vs 'inventory' (dedicated potion inventory tab)
   const [activeTab, setActiveTab] = useState<'players' | 'inventory'>('players');
@@ -506,8 +496,6 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
 
               // Voting indicator logic
               const votedTarget = players.find(target => target.id === p.votedForId);
-              const isClickableTarget = canVoteNow && p.id !== activePlayerId;
-              const isSelectedTarget = selectedVoteTargetId === p.id;
               const isShielded = activeVoteShields.includes(p.id);
               const isSilenced = silencedPlayerIds?.includes(p.id);
 
@@ -541,7 +529,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                   key={p.id}
                   className={`transition-colors ${
                     isCurrent ? 'bg-slate-800/70 border-l-2 border-l-emerald-400' : 'hover:bg-slate-800/40'
-                  } ${isSelectedTarget ? 'ring-2 ring-rose-500 bg-rose-950/30' : ''} ${potionAnimationClass}`}
+                  } ${potionAnimationClass}`}
                 >
                   {/* Player info */}
                   <td className="py-3 px-2 sm:px-3 align-middle overflow-hidden">
@@ -551,7 +539,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                       </span>
                       <div className="min-w-0 flex-1 truncate">
                         <div className="flex items-center gap-1 flex-wrap">
-                          <span className="font-bold text-white text-xs sm:text-sm truncate">
+                          <span className="font-bold text-white text-xs sm:text-sm break-words [overflow-wrap:anywhere] max-w-[120px] leading-tight">
                             {p.name}
                           </span>
                           {isCurrent && (
@@ -741,43 +729,6 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                         <span className="text-[11px] text-slate-500 italic">—</span>
                       )}
 
-                      {/* Quick vote / accuse button if user can vote or change vote */}
-                      {isClickableTarget && (
-                        <motion.button
-                          type="button"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.92 }}
-                          onClick={() => {
-                            sound.click();
-                            onSelectVoteTarget?.(p.id);
-                          }}
-                          className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg border transition-all shrink-0 cursor-pointer whitespace-nowrap ${
-                            isSelectedTarget
-                              ? 'bg-rose-600 text-white border-rose-400 shadow-md ring-1 ring-rose-300'
-                              : 'bg-slate-800 hover:bg-rose-950 text-slate-200 border-slate-600 hover:border-rose-500'
-                          }`}
-                          title={`Select ${p.name} as Infiltrator accusation`}
-                        >
-                          {isSelectedTarget ? 'Selected' : 'Accuse'}
-                        </motion.button>
-                      )}
-
-                      {/* Host can kick / remove player from the game directly */}
-                      {isHost && p.id !== activePlayerId && onKickPlayer && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (window.confirm(`Remove ${p.name} from the game?`)) {
-                              onKickPlayer(p.id);
-                            }
-                          }}
-                          className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/50 transition-colors cursor-pointer shrink-0"
-                          title={`Remove ${p.name} from game`}
-                        >
-                          <UserX className="w-3.5 h-3.5" />
-                        </button>
-                      )}
                     </div>
                   </td>
                 </tr>

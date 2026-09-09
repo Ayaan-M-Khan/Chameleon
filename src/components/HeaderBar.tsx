@@ -312,7 +312,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                           <span className="text-xl shrink-0">{player.avatar}</span>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-xs text-white truncate">{player.name}</span>
+                              <span className="font-bold text-xs text-white break-words [overflow-wrap:anywhere] max-w-[120px] leading-tight">{player.name}</span>
                               {player.isHost && (
                                 <span className="text-[9px] font-mono px-1 py-0.2 bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded font-bold">
                                   HOST
@@ -372,14 +372,6 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Mode Pill (when in room/game) */}
-          {isInRoom && (
-            <div className="hidden lg:flex items-center gap-1 text-[11px] font-bold text-slate-300 bg-slate-800/80 px-2 py-1 rounded-lg border border-slate-700">
-              {gameMode === 'solo' ? <Bot className="w-3.5 h-3.5 text-emerald-400" /> : <Users className="w-3.5 h-3.5 text-cyan-400" />}
-              <span className="capitalize">{gameMode.replace('_', ' ')}</span>
             </div>
           )}
 

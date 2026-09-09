@@ -203,7 +203,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                         }`}
                       >
                         <span>{p.avatar}</span>
-                        <span>{p.name}</span>
+                        <span className="break-words [overflow-wrap:anywhere] max-w-[120px] text-left leading-tight">{p.name}</span>
                         {p.isReadyToLeaveShop && (
                           <span className="text-[10px] text-emerald-600 font-bold font-mono">✓</span>
                         )}
@@ -242,7 +242,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                     >
                       <span>{p.avatar}</span>
                       <span className="font-bold truncate max-w-[80px] sm:max-w-[100px]">
-                        {p.name} {isSelf ? '(You)' : ''}
+                        <span className="break-words [overflow-wrap:anywhere] max-w-[100px] leading-tight">{p.name} {isSelf ? '(You)' : ''}</span>
                       </span>
                       {isReady ? (
                         <span className="flex items-center text-emerald-400 font-bold">

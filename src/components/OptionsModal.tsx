@@ -56,22 +56,22 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                 <Users className="w-4 h-4 text-amber-400" />
                 <span>Number of Infiltrators</span>
               </div>
-              <span className="text-xs font-mono font-bold text-amber-300">
-                {settings.chameleonCount || 1} Infiltrator{(settings.chameleonCount || 1) > 1 ? 's' : ''}
+              <span className="text-xs font-mono font-bold text-amber-300 text-center">
+                {settings.infiltratorCount ?? settings.chameleonCount ?? 1} {(settings.infiltratorCount ?? settings.chameleonCount ?? 1) === 1 ? 'Infiltrator' : 'Infiltrators'}
               </span>
             </div>
             <p className="text-xs text-slate-400 mb-2">
-              Select how many players are secret Infiltrators (2 recommended for 5+ players).
+              Choose how many players secretly receive the Infiltrator role. Two is recommended for 5+ players.
             </p>
             <div className="grid grid-cols-2 gap-2">
               {[1, 2].map((count) => {
-                const isSelected = (settings.chameleonCount || 1) === count;
+                const isSelected = (settings.infiltratorCount ?? settings.chameleonCount ?? 1) === count;
                 return (
                   <button
                     key={count}
                     type="button"
-                    onClick={() => onUpdateSettings({ chameleonCount: count })}
-                    className={`py-1.5 px-3 rounded-lg font-mono font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${
+                    onClick={() => onUpdateSettings({ infiltratorCount: count, chameleonCount: count })}
+                    className={`py-2 px-2 rounded-lg font-mono font-bold text-[11px] uppercase tracking-wider text-center leading-tight transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-amber-400 text-slate-950 font-black shadow-xs ring-1 ring-amber-300'
                         : 'bg-slate-700/80 text-slate-300 hover:bg-slate-700 border border-slate-600'
@@ -392,4 +392,3 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
     </div>
   );
 };
-

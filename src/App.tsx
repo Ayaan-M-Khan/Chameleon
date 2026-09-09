@@ -143,8 +143,16 @@ function sanitizeClue(value: string): string {
     .slice(0, 30);
 }
 
+function sanitizePlayerName(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().slice(0, 20);
+}
+
 function sanitizePlayers(players: Player[]): Player[] {
-  return players.map((player) => ({ ...player, clue: sanitizeClue(player.clue || '') }));
+  return players.map((player) => ({
+    ...player,
+    name: sanitizePlayerName(player.name || 'Player') || 'Player',
+    clue: sanitizeClue(player.clue || ''),
+  }));
 }
 
 export default function App() {
@@ -707,7 +715,7 @@ export default function App() {
     if (gameMode !== 'pass_and_play' && id !== myPlayerId) {
       return;
     }
-    const updated = players.map((p) => (p.id === id ? { ...p, name: newName } : p));
+    const updated = players.map((p) => (p.id === id ? { ...p, name: sanitizePlayerName(newName) || 'Player' } : p));
     setPlayers(updated);
     if (gameMode === 'room' && roomId) {
       socketClient.syncState(roomId, { players: updated });
@@ -2315,9 +2323,6 @@ export default function App() {
                     activeVoteShields={activeVoteShields}
                     gamePhase={gamePhase}
                     anonymousVoting={settings.anonymousVoting}
-                    canVoteNow={gamePhase === 'voting' && !players.every((p) => Boolean(p.votedForId))}
-                    selectedVoteTargetId={selectedVoteTargetId}
-                    onSelectVoteTarget={(targetId) => setSelectedVoteTargetId(targetId)}
                     hasUsedPotionThisTurn={hasUsedPotionThisTurn}
                     onUsePotion={handleUsePotion}
                     recentlyUsedPotionPlayerId={recentlyUsedPotionPlayerId}
@@ -2329,8 +2334,6 @@ export default function App() {
                     forgedTargetPlayerId={forgedTargetPlayerId}
                     silencedPlayerIds={silencedPlayerIds}
                     itemsEnabled={settings.itemsEnabled !== false}
-                    isHost={isHost}
-                    onKickPlayer={handleRemovePlayer}
                   />
                 </div>
 
@@ -2434,6 +2437,7 @@ export default function App() {
         targetScore={settings.targetScore}
         isHost={isHost}
         gameMode={gameMode}
+        activePlayerId={activePlayer.id}
       />
 
       {/* THE MYSTIC SHOP MODAL (Triggers every 3 rounds with all-player confirm-to-leave) */}
