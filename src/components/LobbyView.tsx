@@ -826,17 +826,17 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Setting 1: # of Infiltrators */}
           <div className="bg-slate-900/90 rounded-xl p-3.5 border-2 border-slate-700/80 flex flex-col justify-between space-y-2.5">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="font-display font-bold text-xs uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
+            <div className="text-center">
+              <div className="flex flex-col items-center justify-center gap-1.5">
+                <span className="font-display font-bold text-xs uppercase tracking-wider text-slate-200 flex items-center justify-center gap-1.5">
                   <Users className="w-4 h-4 text-amber-400" />
                   Infiltrators
                 </span>
-                <span className="text-xs font-mono font-black text-amber-300 bg-slate-800 px-1.5 py-0.5 rounded">
+                <span className="text-xs font-mono font-black text-amber-300 bg-slate-800 px-2 py-0.5 rounded text-center">
                   {(settings.infiltratorCount ?? settings.chameleonCount ?? 1)} {(settings.infiltratorCount ?? settings.chameleonCount ?? 1) === 2 ? 'Infiltrators' : 'Infiltrator'}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">
+              <p className="text-[11px] text-slate-400 mt-2 text-center">
                 2 infiltrators is recommended for 5+ players.
               </p>
             </div>

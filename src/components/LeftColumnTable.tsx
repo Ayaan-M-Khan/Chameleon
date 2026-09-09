@@ -537,9 +537,9 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                       <span className="text-xl select-none shrink-0" role="img" aria-label="avatar">
                         {p.avatar || '👤'}
                       </span>
-                      <div className="min-w-0 flex-1 truncate">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <span className="font-bold text-white text-xs sm:text-sm break-words [overflow-wrap:anywhere] max-w-[120px] leading-tight">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1 flex-wrap content-start">
+                          <span className="font-bold text-white text-xs sm:text-sm break-words [overflow-wrap:anywhere] w-full max-w-[130px] leading-tight whitespace-normal">
                             {p.name}
                           </span>
                           {isCurrent && (
