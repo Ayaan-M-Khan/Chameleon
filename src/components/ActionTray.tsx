@@ -515,7 +515,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                       <span className="text-xl shrink-0">{p.avatar}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1 flex-wrap">
-                          <span className="font-bold text-xs truncate leading-tight">
+                          <span className="font-bold text-xs break-words [overflow-wrap:anywhere] max-w-[110px] leading-tight">
                             {p.name}
                           </span>
                           {isMyVotedTarget && (
@@ -571,7 +571,9 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                       <Target className="w-3.5 h-3.5 text-rose-400" />
                       Target selected:{' '}
                       <strong className="text-rose-400 font-bold">
-                        {players.find((p) => p.id === selectedVoteTargetId)?.name}
+                        <span className="break-words [overflow-wrap:anywhere] max-w-[140px] inline-block align-bottom">
+                          {players.find((p) => p.id === selectedVoteTargetId)?.name}
+                        </span>
                       </strong>
                     </span>
                   ) : hasCurrentPlayerVoted ? (
@@ -658,7 +660,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
               {players.filter(p => p.clue).map(p => (
                 <div key={p.id} className="inline-flex items-center gap-1 bg-slate-900 border border-slate-700 px-2.5 py-1 rounded-md text-xs">
                   <span className="text-sm">{p.avatar}</span>
-                  <span className="font-bold text-slate-300 text-[11px]">{p.name}:</span>
+                  <span className="font-bold text-slate-300 text-[11px] break-words [overflow-wrap:anywhere] max-w-[120px]">{p.name}:</span>
                   <span className="font-mono font-bold text-amber-300">"{p.clue}"</span>
                 </div>
               ))}

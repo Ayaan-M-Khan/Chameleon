@@ -316,7 +316,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                               />
                             </div>
                           ) : (
-                            <span className="font-bold text-xs sm:text-sm text-white px-1 truncate select-none">
+                            <span className="font-bold text-xs sm:text-sm text-white px-1 break-words [overflow-wrap:anywhere] max-w-[140px] leading-tight select-none">
                               {p.name}
                             </span>
                           )}
@@ -783,7 +783,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 <span>Quick Rules</span>
               </button>
               <span className="font-mono text-slate-400">
-                {settings.infiltratorCount ?? settings.chameleonCount ?? 1} Infiltrator • {settings.turnTimer ? `${settings.turnTimerSeconds || 60}s` : 'No Timer'} • Target: {settings.targetScore || 5} pts
+                {(settings.infiltratorCount ?? settings.chameleonCount ?? 1)} {(settings.infiltratorCount ?? settings.chameleonCount ?? 1) === 1 ? 'Infiltrator' : 'Infiltrators'} • {settings.turnTimer ? `${settings.turnTimerSeconds || 60}s` : 'No Timer'} • Target: {settings.targetScore || 5} pts
               </span>
             </div>
           </div>
