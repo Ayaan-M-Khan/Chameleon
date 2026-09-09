@@ -546,15 +546,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </div>
 
-        {/* Creator Reference */}
-        <div className="pt-2 text-center">
-          <p className="text-xs text-slate-400 flex items-center justify-center gap-1.5 flex-wrap">
-            <span>Created by</span>
-            <span className="font-bold text-amber-300 font-display uppercase tracking-wider bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/80">
-              Ayaan Khan
-            </span>
-          </p>
-        </div>
       </div>
     </div>
   );
