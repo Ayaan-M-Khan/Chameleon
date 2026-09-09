@@ -34,15 +34,26 @@ export const RightColumnGrid: React.FC<RightColumnGridProps> = ({
   const colHeaders: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D'];
   const rowNumbers: Array<1 | 2 | 3 | 4> = [1, 2, 3, 4];
 
-  // Helper to get item at col and row
+  // Helper to get item at col and row with defensive crash guards
   // row 1..4 (index 0..3), col A..D (index 0..3)
   const getItemAt = (rowIndex: number, colIndex: number) => {
     const idx = rowIndex * 4 + colIndex;
-    return category.items[idx] || '';
+    const raw = (category as any)?.items?.[idx];
+    const cellWord =
+      (typeof raw === 'string' ? raw : raw?.word) ||
+      (category as any)?.words?.[idx] ||
+      `Item ${idx + 1}`;
+    return cellWord;
   };
 
   const isTargetCell = (rNum: number, cChar: string) => {
-    return secretCoordinate?.row === rNum && secretCoordinate?.col === cChar;
+    return Boolean(
+      secretCoordinate &&
+      secretCoordinate.row != null &&
+      secretCoordinate.col != null &&
+      secretCoordinate.row === rNum &&
+      secretCoordinate.col === cChar
+    );
   };
 
   const isFox = role === 'fox';

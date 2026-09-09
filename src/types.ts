@@ -123,7 +123,8 @@ export type GamePhase =
 
 export interface RoundResolution {
   winner: 'innocents' | 'fox';
-  reason: 'innocents_caught_fox' | 'fox_stole_win' | 'fox_escaped_undetected' | 'fox_won_sudden_death';
+  reason: 'innocents_caught_fox' | 'fox_stole_win' | 'fox_escaped_undetected' | 'fox_won_sudden_death' | 'TIE_VOTE';
+  message?: string;
   foxPlayerId: string;
   foxPlayerName: string;
   accusedPlayerId: string | null;

@@ -2,69 +2,65 @@
  * Web Audio sound synthesizers for retro board game experience
  */
 
+let audioCtx: AudioContext | null = null;
+
+export const initAudio = () => {
+  if (typeof window === 'undefined') return;
+  const resumeAudio = () => {
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    window.removeEventListener('pointerdown', resumeAudio);
+    window.removeEventListener('keydown', resumeAudio);
+    window.removeEventListener('touchstart', resumeAudio);
+  };
+  window.addEventListener('pointerdown', resumeAudio, { once: true });
+  window.addEventListener('keydown', resumeAudio, { once: true });
+  window.addEventListener('touchstart', resumeAudio, { once: true });
+};
+
 class SoundFX {
-  private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   public enabled: boolean = true;
   public volume: number = 0.7;
-  private unlockListenersInstalled = false;
 
   constructor() {
-    this.installUnlockListeners();
-  }
-
-  private installUnlockListeners() {
-    if (typeof window === 'undefined' || this.unlockListenersInstalled) return;
-    this.unlockListenersInstalled = true;
-    const unlock = () => {
-      this.unlock();
-      if (this.ctx?.state === 'running') {
-        window.removeEventListener('pointerdown', unlock);
-        window.removeEventListener('touchstart', unlock);
-        window.removeEventListener('keydown', unlock);
-        this.unlockListenersInstalled = false;
-      }
-    };
-    window.addEventListener('pointerdown', unlock, { passive: true });
-    window.addEventListener('touchstart', unlock, { passive: true });
-    window.addEventListener('keydown', unlock, { passive: true });
+    initAudio();
   }
 
   /** Resume the audio context from a user gesture (required by mobile browsers). */
   public unlock() {
     if (!this.enabled || typeof window === 'undefined') return;
     const ctx = this.getContext();
-    if (ctx?.state === 'suspended') {
-      void ctx.resume().catch(() => {
-        // Browsers can reject resume until another user gesture.
-      });
+    if (ctx && ctx.state === 'suspended') {
+      void ctx.resume().catch(() => {});
     }
   }
 
   private getContext(): AudioContext | null {
     if (!this.enabled) return null;
     if (typeof window === 'undefined') return null;
-    if (!this.ctx) {
+    if (!audioCtx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
-        this.ctx = new AudioCtx();
-        this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.value = this.volume;
-        this.masterGain.connect(this.ctx.destination);
+        audioCtx = new AudioCtx();
       }
     }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      void this.ctx.resume().catch(() => {
-        // Playback will be retried from the next user gesture.
-      });
+    if (audioCtx && !this.masterGain) {
+      this.masterGain = audioCtx.createGain();
+      this.masterGain.gain.value = this.volume;
+      this.masterGain.connect(audioCtx.destination);
     }
-    return this.ctx;
+    if (audioCtx && audioCtx.state === 'suspended') {
+      void audioCtx.resume().catch(() => {});
+    }
+    return audioCtx;
   }
 
   setVolume(volume: number) {
     this.volume = Math.max(0, Math.min(1, volume));
-    if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.01);
+    if (this.masterGain && audioCtx) {
+      this.masterGain.gain.setTargetAtTime(this.volume, audioCtx.currentTime, 0.01);
     }
   }
 

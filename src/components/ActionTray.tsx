@@ -77,8 +77,14 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [discussionInput, setDiscussionInput] = React.useState('');
   const [isDiscussionOpen, setIsDiscussionOpen] = React.useState(true);
+  const [isSubmittingClue, setIsSubmittingClue] = React.useState(false);
 
   const isCurrentPlayerSilenced = silencedPlayerIds.includes(activePlayer.id);
+
+  // Reset submission state on gamePhase / player submission changes
+  React.useEffect(() => {
+    setIsSubmittingClue(false);
+  }, [gamePhase, activePlayer.hasSubmittedClue]);
 
   const handleSendDiscussion = (presetText?: string) => {
     const text = (presetText || discussionInput).trim();
@@ -94,11 +100,14 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
     }
   }, [gamePhase, activePlayer.hasSubmittedClue]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      onSubmitClue();
-    }
+  const handleFormSubmitClue = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!clueInput.trim() || isSubmittingClue) return;
+    setIsSubmittingClue(true);
+    onSubmitClue();
+    setTimeout(() => {
+      setIsSubmittingClue(false);
+    }, 600);
   };
 
   return (
@@ -143,7 +152,10 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
             return (
               <div>
                 {!activePlayer.hasSubmittedClue || isEditingClue ? (
-                  <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                  <form
+                    onSubmit={handleFormSubmitClue}
+                    className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3"
+                  >
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -174,7 +186,6 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                           type="text"
                           value={clueInput}
                           onChange={(e) => onChangeClueInput(e.target.value)}
-                          onKeyDown={handleKeyDown}
                           placeholder="e.g. Cleats, John Lennon, Serengeti National Park, Bohemian Rhapsody..."
                           maxLength={30}
                           className="w-full px-3.5 py-2.5 bg-slate-900 border-2 border-slate-700 rounded-lg text-sm sm:text-base font-medium text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-amber-400 shadow-xs pr-16"
@@ -197,15 +208,27 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                         </button>
                       )}
                       <button
-                        onClick={onSubmitClue}
-                        disabled={!clueInput.trim()}
+                        type="submit"
+                        disabled={!clueInput.trim() || isSubmittingClue}
                         className="retro-button px-5 py-2.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 disabled:pointer-events-none rounded-lg font-display font-black text-slate-950 uppercase tracking-wider text-xs sm:text-sm flex items-center gap-2 shadow-md cursor-pointer"
                       >
-                        {isEditingClue ? <CheckCircle2 className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-                        <span>{isEditingClue ? 'Update Clue' : 'Submit Clue'}</span>
+                        {isSubmittingClue ? (
+                          <RotateCcw className="w-4 h-4 animate-spin" />
+                        ) : isEditingClue ? (
+                          <CheckCircle2 className="w-4 h-4" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                        <span>
+                          {isSubmittingClue
+                            ? 'Submitting...'
+                            : isEditingClue
+                            ? 'Update Clue'
+                            : 'Submit Clue'}
+                        </span>
                       </button>
                     </div>
-                  </div>
+                  </form>
                 ) : (
                   <div className="p-4 bg-emerald-950/70 border-2 border-emerald-500/80 rounded-xl text-emerald-100 shadow-md">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">

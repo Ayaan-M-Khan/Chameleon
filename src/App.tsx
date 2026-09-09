@@ -14,7 +14,7 @@ import {
   RoundResolution,
 } from './types';
 import { generateBotClue, decideBotVote, botFoxGuessWord } from './utils/aiBot';
-import { sound } from './utils/sound';
+import { sound, initAudio } from './utils/sound';
 import { POTION_CATALOG } from './data/potions';
 
 import { HeaderBar } from './components/HeaderBar';
@@ -335,8 +335,9 @@ export default function App() {
   const isHost =
     players.find((p) => p.id === myPlayerId)?.isHost ?? (players[0]?.id === myPlayerId);
 
-  // Sync sound utility with state
+  // Sync sound utility with state and initialize browser audio unlock listeners
   useEffect(() => {
+    initAudio();
     sound.enabled = soundEnabled;
     sound.setVolume(volume);
   }, [soundEnabled, volume]);
@@ -1359,49 +1360,43 @@ export default function App() {
       }
     });
 
-    // Find player with highest votes
+    // Find player with highest votes and check if multiple players share the max vote count
     let maxVotes = -1;
-    let accusedId: string | null = null;
-    let isTie = false;
+    const playersWithMaxVotes: string[] = [];
 
     Object.entries(tally).forEach(([targetId, count]) => {
       if (count > maxVotes) {
         maxVotes = count;
-        accusedId = targetId;
-        isTie = false;
-      } else if (count === maxVotes) {
-        isTie = true;
+        playersWithMaxVotes.length = 0;
+        playersWithMaxVotes.push(targetId);
+      } else if (count === maxVotes && count > 0) {
+        playersWithMaxVotes.push(targetId);
       }
     });
+
+    const isTie = playersWithMaxVotes.length > 1 || maxVotes <= 0;
+    const accusedId = !isTie && playersWithMaxVotes.length === 1 ? playersWithMaxVotes[0] : null;
 
     const accusedPlayer = votedPlayers.find((p) => p.id === accusedId) || null;
     const actualFox = votedPlayers.find((p) => p.role === 'fox') || votedPlayers[0];
     const caughtFox = votedPlayers.find((p) => p.id === accusedId && p.role === 'fox') || actualFox;
 
-    // A first-round tie gets one private 20-second sudden-death revote.
-    // A second tie immediately awards the round to the infiltrator.
+    // Voting Tie-Breaker Edge Case Handling:
+    // If two or more players receive the exact same highest vote count,
+    // treat the round as "Infiltrator Escapes" (confusion in the group allowed the Infiltrator to slip away unnoticed).
     if (isTie) {
-      if (suddenDeath) {
-        resolveRound(false, undefined, votedPlayers, tally, null, actualFox, 'fox_won_sudden_death');
-        return;
-      }
-
-      const revotePlayers = votedPlayers.map((p) => ({ ...p, votedForId: null }));
-      setPlayers(revotePlayers);
-      setSelectedVoteTargetId(null);
-      setVoteRound(2);
-      setSuddenDeath(true);
-      setTimeLeft(20);
-      sound.voteStart();
-      if (gameMode === 'room' && roomId) {
-        socketClient.syncState(roomId, {
-          gamePhase: 'voting',
-          players: revotePlayers,
-          voteRound: 2,
-          suddenDeath: true,
-        });
-        broadcastState('voting', revotePlayers);
-      }
+      sound.caught();
+      setCaughtInfiltratorId(null);
+      resolveRound(
+        false,
+        undefined,
+        votedPlayers,
+        tally,
+        null,
+        actualFox,
+        'TIE_VOTE',
+        'Tied vote! The Infiltrator slipped away in the confusion.'
+      );
       return;
     }
 
@@ -1491,7 +1486,8 @@ export default function App() {
     tally: Record<string, number>,
     accusedPlayer: Player | null,
     actualFox: Player,
-    forcedReason?: RoundResolution['reason']
+    forcedReason?: RoundResolution['reason'],
+    customMessage?: string
   ) => {
     const targetWord = secretCoordinate?.item || '';
     const pointsAwarded: Record<string, { points: number; explanation: string }> = {};
@@ -1503,7 +1499,14 @@ export default function App() {
     const infiltratorStealPts = settings.infiltratorStealPoints ?? settings.chameleonStealPoints ?? 1;
     const infiltratorEscapePts = settings.infiltratorEscapePoints ?? settings.chameleonEscapePoints ?? 2;
 
-    if (foxWasCaught) {
+    if (forcedReason === 'TIE_VOTE') {
+      winner = 'fox';
+      reason = 'TIE_VOTE';
+      pointsAwarded[actualFox.id] = {
+        points: infiltratorEscapePts,
+        explanation: `Tied vote! The Infiltrator slipped away in the confusion (+${infiltratorEscapePts} pts)!`,
+      };
+    } else if (foxWasCaught) {
       const isGuessCorrect =
         foxGuessWord?.trim().toLowerCase() === targetWord.trim().toLowerCase();
 
@@ -1598,6 +1601,11 @@ export default function App() {
     const resolution: RoundResolution = {
       winner,
       reason,
+      message:
+        customMessage ||
+        (reason === 'TIE_VOTE'
+          ? 'Tied vote! The Infiltrator slipped away in the confusion.'
+          : undefined),
       foxPlayerId: actualFox.id,
       foxPlayerName: actualFox.name,
       accusedPlayerId: accusedPlayer?.id || null,
@@ -2427,28 +2435,30 @@ export default function App() {
     (caughtInfiltratorId ? activePlayer.id === caughtInfiltratorId : activePlayer.id === foxPlayerId);
 
   return (
-    <div className="min-h-[100dvh] bg-dark-pattern flex flex-col selection:bg-emerald-500 selection:text-slate-950 pb-8 text-slate-100" style={{ minHeight: 'var(--app-height, 100dvh)' }}>
+    <div className="h-[100dvh] max-h-[100dvh] bg-dark-pattern flex flex-col overflow-hidden selection:bg-emerald-500 selection:text-slate-950 text-slate-100">
       {/* Header Bar */}
-      <HeaderBar
-        roomId={roomId}
-        gameMode={gameMode}
-        gamePhase={gamePhase}
-        roundNumber={roundNumber}
-        soundEnabled={soundEnabled}
-        onToggleSound={() => setSoundEnabled(!soundEnabled)}
-        onOpenOptions={() => setIsOptionsOpen(true)}
-        onOpenRules={() => setIsRulesOpen(true)}
-        onLeaveRoom={handleLeaveRoom}
-        peerCount={peerCount}
-        connectionState={connectionState}
-        roomPassword={settings.roomPassword}
-        players={players}
-        isHost={isHost}
-        myPlayerId={myPlayerId}
-        onKickPlayer={handleKickPlayer}
-        myInfiltratorOdds={myInfiltratorOdds}
-        myInfiltratorBoostGold={activePlayer.infiltratorBoostGold ?? activePlayer.chameleonBoostGold}
-      />
+      <div className="shrink-0">
+        <HeaderBar
+          roomId={roomId}
+          gameMode={gameMode}
+          gamePhase={gamePhase}
+          roundNumber={roundNumber}
+          soundEnabled={soundEnabled}
+          onToggleSound={() => setSoundEnabled(!soundEnabled)}
+          onOpenOptions={() => setIsOptionsOpen(true)}
+          onOpenRules={() => setIsRulesOpen(true)}
+          onLeaveRoom={handleLeaveRoom}
+          peerCount={peerCount}
+          connectionState={connectionState}
+          roomPassword={settings.roomPassword}
+          players={players}
+          isHost={isHost}
+          myPlayerId={myPlayerId}
+          onKickPlayer={handleKickPlayer}
+          myInfiltratorOdds={myInfiltratorOdds}
+          myInfiltratorBoostGold={activePlayer.infiltratorBoostGold ?? activePlayer.chameleonBoostGold}
+        />
+      </div>
 
       <FloatingReactions reactions={floatingReactions} />
       {gamePhase !== 'home' && (
@@ -2458,7 +2468,7 @@ export default function App() {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 flex flex-col">
+      <main className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-3 sm:px-6 py-2 sm:py-3 flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
           {gamePhase === 'home' ? (
             /* HOMEPAGE VIEW */
@@ -2468,7 +2478,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 flex flex-col"
+              className="flex-1 min-h-0 overflow-y-auto flex flex-col"
             >
               <HomeView
                 onCreateRoom={handleCreateRoom}
@@ -2487,7 +2497,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 flex flex-col"
+              className="flex-1 min-h-0 overflow-y-auto flex flex-col"
             >
               <LobbyView
                 players={players}
@@ -2523,95 +2533,100 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-1 flex flex-col justify-between"
+              className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden"
             >
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 flex-1 items-stretch">
-                {/* LEFT COLUMN: Player & Clue Table (expanded to 7 cols on lg/xl for full clue visibility) */}
-                <div className="lg:col-span-7 flex flex-col">
-                  <LeftColumnTable
-                    players={players}
-                    activePlayerId={activePlayer.id}
-                    activePlayerRole={activePlayer.role}
-                    impostorPeekPlayerId={impostorPeekPlayerId}
-                    clueLensPeekPlayerId={clueLensPeekPlayerId}
-                    activeVoteShields={activeVoteShields}
-                    gamePhase={gamePhase}
-                    anonymousVoting={settings.anonymousVoting}
-                    hasUsedPotionThisTurn={hasUsedPotionThisTurn}
-                    onUsePotion={handleUsePotion}
-                    recentlyUsedPotionPlayerId={recentlyUsedPotionPlayerId}
-                    recentlyUsedPotionId={recentlyUsedPotionId}
-                    activePotionToast={activePotionToast}
-                    inventory={activePlayer.inventory || {}}
-                    gold={activePlayer.gold ?? 0}
-                    pendingClueForged={pendingClueForged}
-                    forgedTargetPlayerId={forgedTargetPlayerId}
-                    silencedPlayerIds={silencedPlayerIds}
-                    itemsEnabled={settings.itemsEnabled !== false}
-                  />
-                </div>
+              {/* Middle content area: Left column table + 4x4 grid (scrollable on mobile) */}
+              <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start pb-2">
+                  {/* LEFT COLUMN: Player & Clue Table (expanded to 7 cols on lg/xl for full clue visibility) */}
+                  <div className="lg:col-span-7 flex flex-col">
+                    <LeftColumnTable
+                      players={players}
+                      activePlayerId={activePlayer.id}
+                      activePlayerRole={activePlayer.role}
+                      impostorPeekPlayerId={impostorPeekPlayerId}
+                      clueLensPeekPlayerId={clueLensPeekPlayerId}
+                      activeVoteShields={activeVoteShields}
+                      gamePhase={gamePhase}
+                      anonymousVoting={settings.anonymousVoting}
+                      hasUsedPotionThisTurn={hasUsedPotionThisTurn}
+                      onUsePotion={handleUsePotion}
+                      recentlyUsedPotionPlayerId={recentlyUsedPotionPlayerId}
+                      recentlyUsedPotionId={recentlyUsedPotionId}
+                      activePotionToast={activePotionToast}
+                      inventory={activePlayer.inventory || {}}
+                      gold={activePlayer.gold ?? 0}
+                      pendingClueForged={pendingClueForged}
+                      forgedTargetPlayerId={forgedTargetPlayerId}
+                      silencedPlayerIds={silencedPlayerIds}
+                      itemsEnabled={settings.itemsEnabled !== false}
+                    />
+                  </div>
 
-                {/* RIGHT COLUMN: 4x4 Grid Card & Banners (5 cols on lg/xl) */}
-                <div className="lg:col-span-5 flex flex-col">
-                  <RightColumnGrid
-                    key={`${activePlayer.id}-${gamePhase}`}
-                    category={category}
-                    role={activePlayer.role}
-                    secretCoordinate={secretCoordinate}
-                    gamePhase={gamePhase}
-                    isFoxGuesser={gamePhase === 'fox_guess' && isCurrentPlayerTheCaughtFox}
-                    onSelectWordGuess={(word) => setSelectedGuessWord(word)}
-                    selectedGuessWord={selectedGuessWord}
-                    isPassAndPlay={gameMode === 'pass_and_play'}
-                    oracleHighlight={oracleHighlight}
-                    isScrambling={isScrambling}
-                    oracleShattered={oracleShattered}
-                  />
-                  {settings.itemsEnabled !== false && (
-                    <button
-                      type="button"
-                      onClick={() => setIsInfiltratorBoosterModalOpen(true)}
-                      className="mt-2 w-full rounded-xl border border-amber-500/60 bg-amber-950/80 px-3 py-2 text-xs font-display font-black uppercase tracking-wider text-amber-300 hover:bg-amber-900/90 transition-colors"
-                    >
-                      🕵️ Buy Infiltrator Odds Booster Ticket
-                    </button>
-                  )}
+                  {/* RIGHT COLUMN: 4x4 Grid Card & Banners (5 cols on lg/xl) */}
+                  <div className="lg:col-span-5 flex flex-col">
+                    <RightColumnGrid
+                      key={`${activePlayer.id}-${gamePhase}`}
+                      category={category}
+                      role={activePlayer.role}
+                      secretCoordinate={secretCoordinate}
+                      gamePhase={gamePhase}
+                      isFoxGuesser={gamePhase === 'fox_guess' && isCurrentPlayerTheCaughtFox}
+                      onSelectWordGuess={(word) => setSelectedGuessWord(word)}
+                      selectedGuessWord={selectedGuessWord}
+                      isPassAndPlay={gameMode === 'pass_and_play'}
+                      oracleHighlight={oracleHighlight}
+                      isScrambling={isScrambling}
+                      oracleShattered={oracleShattered}
+                    />
+                    {settings.itemsEnabled !== false && (
+                      <button
+                        type="button"
+                        onClick={() => setIsInfiltratorBoosterModalOpen(true)}
+                        className="mt-2 w-full rounded-xl border border-amber-500/60 bg-amber-950/80 px-3 py-2 text-xs font-display font-black uppercase tracking-wider text-amber-300 hover:bg-amber-900/90 transition-colors"
+                      >
+                        🕵️ Buy Infiltrator Odds Booster Ticket
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* ACTION & VOTING TRAY (BOTTOM SECTION) */}
-              <ActionTray
-                gamePhase={gamePhase}
-                activePlayer={activePlayer}
-                players={players}
-                settings={settings}
-                timeLeft={timeLeft}
-                voteRound={voteRound}
-                suddenDeath={suddenDeath}
-                clueInput={clueInput}
-                onChangeClueInput={(value) => setClueInput(sanitizeClue(value, false))}
-                onSubmitClue={handleSubmitClue}
-                onStartEditClue={handleStartEditClue}
-                isEditingClue={isEditingClue}
-                onCancelEditClue={handleCancelEditClue}
-                silencedPlayerIds={silencedPlayerIds}
-                discussionMessages={discussionMessages}
-                onSendDiscussionMessage={handleSendDiscussionMessage}
-                selectedVoteTargetId={selectedVoteTargetId}
-                onSelectVoteTarget={(id) => setSelectedVoteTargetId(id)}
-                onSubmitVote={handleSubmitVote}
-                hasCurrentPlayerVoted={Boolean(activePlayer.votedForId)}
-                selectedGuessWord={selectedGuessWord}
-                onSubmitFoxGuess={handleSubmitFoxGuess}
-                isCurrentPlayerTheCaughtFox={isCurrentPlayerTheCaughtFox}
-                caughtFoxPlayer={actualFoxPlayer}
-                roundResolution={roundResolution}
-                onNextRound={handleNextRound}
-                onOpenResolutionModal={() => setIsResolutionModalOpen(true)}
-                roundNumber={roundNumber}
-                isHost={isHost}
-                gameMode={gameMode}
-              />
+              {/* ACTION & VOTING TRAY (BOTTOM SECTION - FIXED & ACCESSIBLE) */}
+              <div className="shrink-0 pt-2 safe-bottom">
+                <ActionTray
+                  gamePhase={gamePhase}
+                  activePlayer={activePlayer}
+                  players={players}
+                  settings={settings}
+                  timeLeft={timeLeft}
+                  voteRound={voteRound}
+                  suddenDeath={suddenDeath}
+                  clueInput={clueInput}
+                  onChangeClueInput={(value) => setClueInput(sanitizeClue(value, false))}
+                  onSubmitClue={handleSubmitClue}
+                  onStartEditClue={handleStartEditClue}
+                  isEditingClue={isEditingClue}
+                  onCancelEditClue={handleCancelEditClue}
+                  silencedPlayerIds={silencedPlayerIds}
+                  discussionMessages={discussionMessages}
+                  onSendDiscussionMessage={handleSendDiscussionMessage}
+                  selectedVoteTargetId={selectedVoteTargetId}
+                  onSelectVoteTarget={(id) => setSelectedVoteTargetId(id)}
+                  onSubmitVote={handleSubmitVote}
+                  hasCurrentPlayerVoted={Boolean(activePlayer.votedForId)}
+                  selectedGuessWord={selectedGuessWord}
+                  onSubmitFoxGuess={handleSubmitFoxGuess}
+                  isCurrentPlayerTheCaughtFox={isCurrentPlayerTheCaughtFox}
+                  caughtFoxPlayer={actualFoxPlayer}
+                  roundResolution={roundResolution}
+                  onNextRound={handleNextRound}
+                  onOpenResolutionModal={() => setIsResolutionModalOpen(true)}
+                  roundNumber={roundNumber}
+                  isHost={isHost}
+                  gameMode={gameMode}
+                />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

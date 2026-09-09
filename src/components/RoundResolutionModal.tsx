@@ -292,18 +292,27 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
 
               <h2 className="text-2xl sm:text-4xl font-display font-black tracking-tight text-white uppercase flex items-center justify-center gap-2">
                 <span>{isInnocentWin ? '🏆' : '🕵️'}</span>
-                <span>{isInnocentWin ? 'INNOCENTS VICTORIOUS!' : 'INFILTRATOR ESCAPED!'}</span>
+                <span>
+                  {isInnocentWin
+                    ? 'INNOCENTS VICTORIOUS!'
+                    : roundResolution.reason === 'TIE_VOTE'
+                    ? 'TIED VOTE — INFILTRATOR ESCAPED!'
+                    : 'INFILTRATOR ESCAPED!'}
+                </span>
               </h2>
 
               <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1 font-medium">
-                {roundResolution.reason === 'innocents_caught_fox' &&
-                  'The room correctly sniffed out The Infiltrator, and the impostor could not guess the secret word!'}
-                {roundResolution.reason === 'fox_stole_win' &&
-                  'The Infiltrator was voted out, but miraculously deduced the secret word to steal the round!'}
-                {roundResolution.reason === 'fox_escaped_undetected' &&
-                  'The Infiltrator successfully blended in unnoticed while someone else took the blame!'}
-                {roundResolution.reason === 'fox_won_sudden_death' &&
-                  'The vote was tied again—or time ran out. The Infiltrator claims the round!'}
+                {roundResolution.message ||
+                  (roundResolution.reason === 'TIE_VOTE' &&
+                    'Tied vote! The Infiltrator slipped away in the confusion.') ||
+                  (roundResolution.reason === 'innocents_caught_fox' &&
+                    'The room correctly sniffed out The Infiltrator, and the impostor could not guess the secret word!') ||
+                  (roundResolution.reason === 'fox_stole_win' &&
+                    'The Infiltrator was voted out, but miraculously deduced the secret word to steal the round!') ||
+                  (roundResolution.reason === 'fox_escaped_undetected' &&
+                    'The Infiltrator successfully blended in unnoticed while someone else took the blame!') ||
+                  (roundResolution.reason === 'fox_won_sudden_death' &&
+                    'The vote was tied again—or time ran out. The Infiltrator claims the round!')}
               </p>
             </div>
 
