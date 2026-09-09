@@ -137,16 +137,17 @@ const INITIAL_PLAYERS: Player[] = [
   },
 ];
 
-function sanitizeClue(value: string): string {
-  return value
+function sanitizeClue(value: string, trim = true): string {
+  const sanitized = value
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<[^>]*>/g, '')
-    .trim()
     .slice(0, 30);
+  return trim ? sanitized.trim() : sanitized;
 }
 
-function sanitizePlayerName(value: string): string {
-  return value.replace(/\s+/g, ' ').trim().slice(0, 20);
+function sanitizePlayerName(value: string, trim = true): string {
+  const sanitized = value.replace(/\s+/g, ' ').slice(0, 20);
+  return trim ? sanitized.trim() : sanitized;
 }
 
 function sanitizePlayers(players: Player[]): Player[] {
@@ -789,7 +790,7 @@ export default function App() {
     if (gameMode !== 'pass_and_play' && id !== myPlayerId) {
       return;
     }
-    const updated = players.map((p) => (p.id === id ? { ...p, name: sanitizePlayerName(newName) || 'Player' } : p));
+    const updated = players.map((p) => (p.id === id ? { ...p, name: sanitizePlayerName(newName, false) } : p));
     setPlayers(updated);
     if (gameMode === 'room' && roomId) {
       socketClient.syncState(roomId, { players: updated });
@@ -2507,7 +2508,7 @@ export default function App() {
                 voteRound={voteRound}
                 suddenDeath={suddenDeath}
                 clueInput={clueInput}
-                onChangeClueInput={(value) => setClueInput(sanitizeClue(value))}
+                onChangeClueInput={(value) => setClueInput(sanitizeClue(value, false))}
                 onSubmitClue={handleSubmitClue}
                 onStartEditClue={handleStartEditClue}
                 isEditingClue={isEditingClue}
