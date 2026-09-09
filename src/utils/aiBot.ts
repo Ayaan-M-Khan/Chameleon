@@ -1,4 +1,10 @@
-import { Category, Player } from '../types';
+import { BotPersonality, Category, Player } from '../types';
+
+const personalityFallbacks: Record<BotPersonality, string[]> = {
+  literal: ['Direct match', 'Taxonomic clue', 'Common example'],
+  pop_culture: ['Iconic scene', 'Famous reference', 'You have seen this'],
+  abstract: ['A sideways connection', 'A poetic association', 'Think beyond the obvious'],
+};
 
 /**
  * AI Bot Clue Generation
@@ -11,6 +17,7 @@ export function generateBotClue(
   foxCanSeeOneClueEarly: boolean
 ): string {
   const safeTarget = targetWord && targetWord.trim() !== '' ? targetWord.trim() : (category.items[0] || 'Target');
+  const personality = bot.personality || (bot.isHuman ? 'literal' : 'abstract');
 
   if (bot.role === 'innocent') {
     // Pick from the target word's clue bank (case-insensitive lookup)
@@ -24,7 +31,14 @@ export function generateBotClue(
     const validPool = pool.filter(c => c && c.trim() !== '');
 
     if (validPool.length > 0) {
-      return validPool[Math.floor(Math.random() * validPool.length)].trim();
+      const clue = validPool[Math.floor(Math.random() * validPool.length)].trim();
+      if (personality === 'pop_culture' && !/mufasa|rock|song|movie|famous|iconic/i.test(clue)) {
+        return `${clue} (iconic)`;
+      }
+      if (personality === 'abstract' && clue.length < 6) {
+        return `${clue} spark`;
+      }
+      return clue;
     }
     return safeTarget;
   }
@@ -48,7 +62,7 @@ export function generateBotClue(
         c => c && c.toLowerCase() !== sampleClue && !existingClues.map(e => e.toLowerCase()).includes(c.toLowerCase())
       );
       if (candidateBank.length > 0) {
-        return candidateBank[Math.floor(Math.random() * candidateBank.length)].trim();
+        return formatPersonalityClue(candidateBank[Math.floor(Math.random() * candidateBank.length)], personality);
       }
     }
   }
@@ -61,10 +75,17 @@ export function generateBotClue(
   const pool = filtered.length > 0 ? filtered : foxBank;
   const validPool = pool.filter(c => c && c.trim() !== '');
   if (validPool.length > 0) {
-    return validPool[Math.floor(Math.random() * validPool.length)].trim();
+    return formatPersonalityClue(validPool[Math.floor(Math.random() * validPool.length)], personality);
   }
 
-  return 'Wild';
+  return personalityFallbacks[personality][Math.floor(Math.random() * personalityFallbacks[personality].length)];
+}
+
+function formatPersonalityClue(clue: string, personality: BotPersonality): string {
+  const trimmed = clue.trim();
+  if (personality === 'literal') return trimmed;
+  if (personality === 'pop_culture') return /mufasa|rock|song|movie|famous|iconic/i.test(trimmed) ? trimmed : `${trimmed} classic`;
+  return trimmed.length < 6 ? `${trimmed} spark` : trimmed;
 }
 
 /**

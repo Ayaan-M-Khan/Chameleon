@@ -1,4 +1,13 @@
 export type PlayerRole = 'innocent' | 'fox';
+export type BotPersonality = 'literal' | 'pop_culture' | 'abstract';
+
+export interface LifetimeMatchStats {
+  roundsPlayed: number;
+  correctInfiltratorVotes: number;
+  accusationVotesReceived: number;
+  infiltratorRoundsWonWithoutAccusation: number;
+  goldSpent: number;
+}
 
 export interface PotionItem {
   id: string;
@@ -31,6 +40,8 @@ export interface Player {
   votedForId: string | null;
   isReady: boolean;
   isReadyToLeaveShop?: boolean;
+  personality?: BotPersonality;
+  lifetimeStats?: LifetimeMatchStats;
 }
 
 export interface DiscussionMessage {
@@ -111,4 +122,6 @@ export interface RoundResolution {
   foxGuessCoordinate?: string;
   voteTally: Record<string, number>;
   pointsAwarded: Record<string, { points: number; explanation: string }>;
+  accolades?: Record<string, string[]>;
+  isMatchComplete?: boolean;
 }

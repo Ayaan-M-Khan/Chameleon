@@ -172,11 +172,11 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                           onChange={(e) => onChangeClueInput(e.target.value)}
                           onKeyDown={handleKeyDown}
                           placeholder="e.g. Cleats, John Lennon, Serengeti National Park, Bohemian Rhapsody..."
-                          maxLength={80}
+                          maxLength={30}
                           className="w-full px-3.5 py-2.5 bg-slate-900 border-2 border-slate-700 rounded-lg text-sm sm:text-base font-medium text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-amber-400 shadow-xs pr-16"
                         />
                         <span className="absolute right-3 text-[11px] font-mono font-bold text-slate-400">
-                          {clueInput.length}/80
+                          {clueInput.length}/30
                         </span>
                       </div>
                     </div>
@@ -543,7 +543,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                           }`}
                           title={p.clue ? `Clue: "${p.clue}"` : undefined}
                         >
-                          {p.clue ? `"${p.clue}"` : <span className="text-slate-500 italic font-sans font-normal text-[10px]">No clue</span>}
+                          {p.clue ? <span className="break-words truncate max-w-[200px] inline-block align-bottom">"{p.clue}"</span> : <span className="text-slate-500 italic font-sans font-normal text-[10px]">No clue</span>}
                         </div>
                       </div>
 

@@ -120,14 +120,8 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
   const cluesSubmittedCount = players.filter((p) => p.hasSubmittedClue).length;
   const votesCastCount = players.filter((p) => Boolean(p.votedForId)).length;
 
-  // Filter potions for inventory panel based on player role
-  const compatiblePotions = POTION_CATALOG.filter((item) => {
-    const matchesRole = item.roleTarget === 'all' ||
-      (item.roleTarget === 'fox' && isImpostor) ||
-      (item.roleTarget === 'innocent' && !isImpostor);
-    const quantity = inventory[item.id] || 0;
-    return matchesRole && quantity > 0;
-  }).map((item) => ({
+  // Keep all purchased potions visible; role compatibility only gates usage.
+  const compatiblePotions = POTION_CATALOG.filter((item) => (inventory[item.id] || 0) > 0).map((item) => ({
     potion: item,
     quantity: inventory[item.id] || 0,
   }));
@@ -371,6 +365,9 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
           {sortedPotions.length > 0 ? (
             <div className="space-y-2 flex-1 overflow-y-auto pr-0.5">
               {sortedPotions.map(({ potion, quantity }) => {
+                const isRoleCompatible = potion.roleTarget === 'all' ||
+                  (potion.roleTarget === 'fox' && isImpostor) ||
+                  (potion.roleTarget === 'innocent' && !isImpostor);
                 const potionType = POTION_TYPES[potion.id] || {
                   label: 'Item',
                   tagColor: 'text-purple-300 bg-purple-950/80 border-purple-600/60',
@@ -407,6 +404,11 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                                 Innocent Potion
                               </span>
                             )}
+                            {!isRoleCompatible && (
+                              <span className="text-[9px] font-bold bg-slate-800 text-slate-400 border border-slate-600 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                Unavailable ({potion.roleTarget === 'fox' ? 'Infiltrator' : 'Innocent'} Only)
+                              </span>
+                            )}
                           </div>
                           <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
                             {potion.description}
@@ -415,19 +417,19 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                       </div>
 
                       <motion.button
-                        disabled={hasUsedPotionThisTurn}
-                        whileTap={!hasUsedPotionThisTurn ? { scale: 0.92 } : undefined}
+                        disabled={hasUsedPotionThisTurn || !isRoleCompatible}
+                        whileTap={!hasUsedPotionThisTurn && isRoleCompatible ? { scale: 0.92 } : undefined}
                         onClick={() => handleUsePotionWithAnimation(potion.id)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-display font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
                           animatingPotionId === potion.id
                             ? 'bg-purple-400 text-slate-950 ring-4 ring-purple-300 animate-pulse'
-                            : hasUsedPotionThisTurn
+                            : hasUsedPotionThisTurn || !isRoleCompatible
                             ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-50'
                             : 'retro-button bg-purple-600 hover:bg-purple-500 active:scale-95 text-white border-purple-400 shadow-sm'
                         }`}
-                        title={hasUsedPotionThisTurn ? 'Already used 1 potion this turn' : `Use ${potion.name}`}
+                        title={!isRoleCompatible ? 'Unavailable for your current role' : hasUsedPotionThisTurn ? 'Already used 1 potion this turn' : `Use ${potion.name}`}
                       >
-                        {animatingPotionId === potion.id ? 'CASTING… ✨' : 'USE'}
+                        {animatingPotionId === potion.id ? 'CASTING… ✨' : !isRoleCompatible ? 'UNAVAILABLE' : 'USE'}
                       </motion.button>
                     </div>
                   </div>
@@ -829,6 +831,9 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
             {sortedPotions.length > 0 ? (
               <div className="space-y-1.5">
                 {sortedPotions.map(({ potion, quantity }) => {
+                  const isRoleCompatible = potion.roleTarget === 'all' ||
+                    (potion.roleTarget === 'fox' && isImpostor) ||
+                    (potion.roleTarget === 'innocent' && !isImpostor);
                   const potionType = POTION_TYPES[potion.id] || {
                     label: 'Item',
                     tagColor: 'text-purple-300 bg-purple-950/80 border-purple-600/60',
@@ -852,6 +857,11 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                             <span className="font-mono text-purple-300 font-black text-[11px] bg-purple-950 px-1.5 py-0.2 rounded border border-purple-700">
                               x{quantity}
                             </span>
+                            {!isRoleCompatible && (
+                              <span className="text-[9px] font-bold bg-slate-800 text-slate-400 border border-slate-600 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                Unavailable ({potion.roleTarget === 'fox' ? 'Infiltrator' : 'Innocent'} Only)
+                              </span>
+                            )}
                           </div>
                           <span className="text-[10px] text-slate-400 block truncate">
                             {potion.description}
@@ -860,19 +870,19 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                       </div>
 
                       <motion.button
-                        disabled={hasUsedPotionThisTurn}
-                        whileTap={!hasUsedPotionThisTurn ? { scale: 0.92 } : undefined}
+                        disabled={hasUsedPotionThisTurn || !isRoleCompatible}
+                        whileTap={!hasUsedPotionThisTurn && isRoleCompatible ? { scale: 0.92 } : undefined}
                         onClick={() => handleUsePotionWithAnimation(potion.id)}
                         className={`ml-2 px-3 py-1.5 rounded-lg text-[11px] font-display font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
                           animatingPotionId === potion.id
                             ? 'bg-purple-400 text-slate-950 ring-4 ring-purple-300 animate-pulse'
-                            : hasUsedPotionThisTurn
+                            : hasUsedPotionThisTurn || !isRoleCompatible
                             ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-50'
                             : 'retro-button bg-purple-600 hover:bg-purple-500 active:scale-95 text-white border-purple-400 shadow-xs'
                         }`}
-                        title={hasUsedPotionThisTurn ? 'Already used 1 potion this turn' : `Use ${potion.name}`}
+                        title={!isRoleCompatible ? 'Unavailable for your current role' : hasUsedPotionThisTurn ? 'Already used 1 potion this turn' : `Use ${potion.name}`}
                       >
-                        {animatingPotionId === potion.id ? 'CASTING… ✨' : 'USE'}
+                        {animatingPotionId === potion.id ? 'CASTING… ✨' : !isRoleCompatible ? 'UNAVAILABLE' : 'USE'}
                       </motion.button>
                     </div>
                   );
