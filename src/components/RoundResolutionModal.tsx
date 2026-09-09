@@ -35,7 +35,10 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
 
   // Trigger celebration confetti, particle animation, & fanfare audio based on winner
   useEffect(() => {
-    if (!isOpen || !roundResolution) return;
+    if (!isOpen || !roundResolution) {
+      confetti.reset();
+      return;
+    }
 
     if (isInnocentWin) {
       // Audio Fanfare
@@ -83,6 +86,7 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
       return () => {
         clearTimeout(timer1);
         clearTimeout(timer2);
+        confetti.reset();
       };
     } else {
       // Audio Stealth Victory
@@ -130,6 +134,7 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
       return () => {
         clearTimeout(timer1);
         clearTimeout(timer2);
+        confetti.reset();
       };
     }
   }, [isOpen, roundResolution, isInnocentWin]);
@@ -380,6 +385,21 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
             </div>
 
             {/* Gold Reward & Shop Alert with Live Countdown */}
+            {roundResolution.isMatchComplete && roundResolution.accolades && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {Object.entries(roundResolution.accolades as Record<string, string[]>).flatMap(([playerId, badges]) => {
+                  const player = players.find((p) => p.id === playerId);
+                  return (badges || []).map((badge) => (
+                    <div key={`${playerId}-${badge}`} className="p-3 rounded-xl bg-gradient-to-br from-amber-950/90 via-purple-950/80 to-slate-900 border border-amber-400/80 shadow-[0_0_18px_rgba(251,191,36,0.35)]">
+                      <div className="text-[10px] font-mono uppercase tracking-widest text-amber-300">Match Accolade</div>
+                      <div className="font-display font-black text-white mt-1">{badge}</div>
+                      <div className="text-[11px] text-slate-300 mt-1 truncate">{player?.name}</div>
+                    </div>
+                  ));
+                })}
+              </div>
+            )}
+
             {(() => {
               const isShopRound = Boolean(roundNumber && roundNumber % 3 === 0);
               const roundsUntilShop = roundNumber ? 3 - (roundNumber % 3 === 0 ? 3 : roundNumber % 3) : 3;

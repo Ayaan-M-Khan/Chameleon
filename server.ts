@@ -104,6 +104,7 @@ interface ServerRoom {
 
 // In-memory room store
 const rooms = new Map<string, ServerRoom>();
+const roomSubscriptions = new Map<string, Set<WebSocket>>();
 
 // WebSocket client registry: ws -> { roomId, playerId }
 interface ClientMeta {
@@ -299,6 +300,7 @@ app.get('/api/rooms/:roomId', (req, res) => {
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
   }
+  room.lastActive = Date.now();
   res.json({ success: true, room });
 });
 
@@ -435,6 +437,10 @@ async function startServer() {
       try {
         const data = JSON.parse(rawData.toString());
         if (!data || !data.type) return;
+        if (meta.roomId) {
+          const activeRoom = rooms.get(meta.roomId);
+          if (activeRoom) activeRoom.lastActive = Date.now();
+        }
 
         if (data.type === 'PING') {
           ws.send(JSON.stringify({ type: 'PONG' }));
@@ -494,6 +500,7 @@ async function startServer() {
               });
             }
           }
+          room.lastActive = Date.now();
 
           // Send current state back to joining client
           ws.send(JSON.stringify({ type: 'ROOM_STATE_SYNC', room }));
@@ -575,8 +582,21 @@ async function startServer() {
     }
   }, 25000);
 
+  const ROOM_TIMEOUT_MS = 30 * 60 * 1000;
+  const roomCleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [roomId, room] of rooms.entries()) {
+      if (now - (room.lastActive || room.createdAt) > ROOM_TIMEOUT_MS) {
+        console.log(`Purging inactive room: ${roomId}`);
+        roomSubscriptions.delete(roomId);
+        rooms.delete(roomId);
+      }
+    }
+  }, 5 * 60 * 1000);
+
   server.on('close', () => {
     clearInterval(pingInterval);
+    clearInterval(roomCleanupInterval);
   });
 
   // Vite middleware in dev mode, static serving in production

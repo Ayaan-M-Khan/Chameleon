@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import confetti from 'canvas-confetti';
 import {
   Sparkles,
   Coins,
@@ -9,7 +8,6 @@ import {
   Check,
   ShoppingBag,
   Info,
-  AlertCircle,
   Users,
   CheckCircle2,
   Clock,
@@ -63,20 +61,10 @@ export const ShopModal: React.FC<ShopModalProps> = ({
   const allPlayersReady = totalPlayers > 0 && readyCount === totalPlayers;
   const isCurrentShopperReady = Boolean(currentShopper.isReadyToLeaveShop);
 
-  // 1. Grand Opening fanfare and confetti on entrance
+  // Shop entrance uses audio only; round confetti must not bleed into this phase.
   useEffect(() => {
     if (isOpen) {
       sound.shopOpen();
-      try {
-        confetti({
-          particleCount: 55,
-          spread: 75,
-          origin: { y: 0.55 },
-          colors: ['#F59E0B', '#FBBF24', '#A855F7', '#34D399', '#EAB308'],
-        });
-      } catch {
-        // Ignore canvas confetti error if not available
-      }
     }
   }, [isOpen]);
 
@@ -280,9 +268,6 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                     <div className="w-24 h-24 rounded-full bg-gradient-to-b from-purple-900 to-slate-900 border-2 border-amber-400/80 flex items-center justify-center text-5xl shadow-xl shadow-purple-950/60">
                       🧙‍♂️
                     </div>
-                    <span className="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 text-[10px] font-mono font-black px-1.5 py-0.5 rounded-full border border-amber-300">
-                      LV.99
-                    </span>
                   </div>
 
                   <div className="font-display font-black text-lg text-amber-200 tracking-wide">
@@ -340,13 +325,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {POTION_CATALOG.map((item) => {
-                      const isRoleCompatible =
-                        item.roleTarget === 'all' ||
-                        (item.roleTarget === 'fox' && isInfiltrator) ||
-                        (item.roleTarget === 'innocent' && !isInfiltrator);
-
                       const canAfford = currentGold >= item.cost;
-                      const isPurchasable = isRoleCompatible && canAfford;
+                      const isPurchasable = canAfford;
                       const ownedCount = currentShopper.inventory?.[item.id] || 0;
                       const isRecent = justPurchasedId === item.id;
 
@@ -354,9 +334,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                         <div
                           key={item.id}
                           className={`retro-card p-3.5 rounded-xl border-2 transition-all flex flex-col justify-between space-y-2.5 ${
-                            isRoleCompatible
-                              ? 'bg-slate-900/90 border-slate-700 hover:border-amber-400/80 shadow-md'
-                              : 'bg-slate-900/50 border-slate-800 opacity-60'
+                            'bg-slate-900/90 border-slate-700 hover:border-amber-400/80 shadow-md'
                           } ${isRecent ? 'ring-2 ring-emerald-400 bg-emerald-950/40' : ''}`}
                         >
                           {/* Item Card Header */}
@@ -401,12 +379,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
 
                           {/* Buy Button & Constraints */}
                           <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between gap-2">
-                            {!isRoleCompatible ? (
-                              <span className="text-[10px] font-mono text-slate-500 italic flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3 text-slate-500" />
-                                Not for your role
-                              </span>
-                            ) : !canAfford ? (
+                            {!canAfford ? (
                               <span className="text-[10px] font-mono text-rose-400 italic">
                                 Need {item.cost - currentGold}g more
                               </span>

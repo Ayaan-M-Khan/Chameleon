@@ -15,6 +15,7 @@ import {
 } from './types';
 import { generateBotClue, decideBotVote, botFoxGuessWord } from './utils/aiBot';
 import { sound } from './utils/sound';
+import { POTION_CATALOG } from './data/potions';
 
 import { HeaderBar } from './components/HeaderBar';
 import { motion, AnimatePresence } from 'motion/react';
@@ -82,6 +83,7 @@ const INITIAL_PLAYERS: Player[] = [
     hasSubmittedClue: false,
     votedForId: null,
     isReady: false,
+    personality: 'literal',
   },
   {
     id: 'bot-1',
@@ -97,6 +99,7 @@ const INITIAL_PLAYERS: Player[] = [
     hasSubmittedClue: false,
     votedForId: null,
     isReady: false,
+    personality: 'pop_culture',
   },
   {
     id: 'bot-2',
@@ -112,6 +115,7 @@ const INITIAL_PLAYERS: Player[] = [
     hasSubmittedClue: false,
     votedForId: null,
     isReady: false,
+    personality: 'abstract',
   },
   {
     id: 'bot-3',
@@ -127,8 +131,21 @@ const INITIAL_PLAYERS: Player[] = [
     hasSubmittedClue: false,
     votedForId: null,
     isReady: false,
+    personality: 'literal',
   },
 ];
+
+function sanitizeClue(value: string): string {
+  return value
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .trim()
+    .slice(0, 30);
+}
+
+function sanitizePlayers(players: Player[]): Player[] {
+  return players.map((player) => ({ ...player, clue: sanitizeClue(player.clue || '') }));
+}
 
 export default function App() {
   // Parse any invite link query or hash parameters on initial load
@@ -331,7 +348,7 @@ export default function App() {
           return;
         }
 
-        if (event.room.players) setPlayers(event.room.players);
+        if (event.room.players) setPlayers(sanitizePlayers(event.room.players));
         if (event.room.settings) setSettings((prev) => ({ ...prev, ...event.room.settings }));
         if (event.room.gamePhase) {
           setGamePhase(event.room.gamePhase);
@@ -358,7 +375,7 @@ export default function App() {
         if (event.room.id !== roomIdRef.current) return;
         const amInRoom = event.room.players?.some((p) => p.id === myPlayerId);
         if (!amInRoom) return;
-        if (event.room.players) setPlayers(event.room.players);
+        if (event.room.players) setPlayers(sanitizePlayers(event.room.players));
       } else if (event.type === 'PLAYER_KICKED') {
         if (event.kickedPlayerId === myPlayerId) {
           alert('You were removed from the party by the host.');
@@ -366,7 +383,7 @@ export default function App() {
           return;
         }
         if (event.room && event.room.id === roomIdRef.current && event.room.players) {
-          setPlayers(event.room.players);
+          setPlayers(sanitizePlayers(event.room.players));
         }
       }
     });
@@ -398,7 +415,7 @@ export default function App() {
       } else if (data.type === 'STATE_SYNC' && gameMode === 'room') {
         if (gamePhaseRef.current === 'home' || !roomIdRef.current) return;
         if (data.phase) setGamePhase(data.phase);
-        if (data.players) setPlayers(data.players);
+        if (data.players) setPlayers(sanitizePlayers(data.players));
         if (data.roundNumber !== undefined) setRoundNumber(data.roundNumber);
         if (data.category) {
           setCategory(data.category);
@@ -675,6 +692,7 @@ export default function App() {
       hasSubmittedClue: false,
       votedForId: null,
       isReady: false,
+      personality: (['literal', 'pop_culture', 'abstract'] as const)[players.filter((p) => !p.isHuman).length % 3],
     };
     const updated = [...players, newBot];
     setPlayers(updated);
@@ -763,7 +781,7 @@ export default function App() {
     if (!clueInput.trim()) return;
     sound.clueChime();
 
-    const formattedClue = clueInput.trim();
+    const formattedClue = sanitizeClue(clueInput);
     const currentActiveId = activePlayer.id;
     setIsEditingClue(false);
 
@@ -821,7 +839,7 @@ export default function App() {
         const fallback = p.isHuman
           ? (p.role === 'fox' ? 'Wild' : (secretWord || 'Hint'))
           : generateBotClue(p, activeCat, secretWord, existingClues, settings.foxSeeOneClueEarly);
-        return { ...p, clue: fallback, hasSubmittedClue: true, isReady: true };
+        return { ...p, clue: sanitizeClue(fallback), hasSubmittedClue: true, isReady: true };
       });
       if (gameMode === 'room' && roomId) {
         socketClient.syncState(roomId, { players: updated });
@@ -882,7 +900,7 @@ export default function App() {
 
           const nextPlayers = prev.map((p) =>
             p.id === bot.id
-              ? { ...p, clue: botClue, hasSubmittedClue: true, isReady: true }
+              ? { ...p, clue: sanitizeClue(botClue), hasSubmittedClue: true, isReady: true }
               : p
           );
 
@@ -936,7 +954,7 @@ export default function App() {
         : generateBotClue(p, activeCat, secretWord, existingClues, settings.foxSeeOneClueEarly);
       return {
         ...p,
-        clue: generated || (p.role === 'fox' ? 'Wild' : 'Clue'),
+        clue: sanitizeClue(generated || (p.role === 'fox' ? 'Wild' : 'Clue')),
         hasSubmittedClue: true,
         isReady: true,
       };
@@ -947,7 +965,7 @@ export default function App() {
     let finalWithForgedClues = verifiedPlayers;
     if (pending) {
       finalWithForgedClues = verifiedPlayers.map((p) =>
-        p.id === pending.targetPlayerId ? { ...p, clue: pending.newClue } : p
+        p.id === pending.targetPlayerId ? { ...p, clue: sanitizeClue(pending.newClue) } : p
       );
       setForgedTargetPlayerId(pending.targetPlayerId);
       setPendingClueForged(null);
@@ -1378,12 +1396,41 @@ export default function App() {
     // Update cumulative scores and award 100 Gold coins per round
     const updatedPlayers = currentPlayers.map((p) => {
       const earned = pointsAwarded[p.id]?.points || 0;
+      const priorStats = p.lifetimeStats || {
+        roundsPlayed: 0,
+        correctInfiltratorVotes: 0,
+        accusationVotesReceived: 0,
+        infiltratorRoundsWonWithoutAccusation: 0,
+        goldSpent: 0,
+      };
       return {
         ...p,
         score: p.score + earned,
         gold: (p.gold ?? 0) + 100,
+        lifetimeStats: {
+          ...priorStats,
+          roundsPlayed: priorStats.roundsPlayed + 1,
+          correctInfiltratorVotes: priorStats.correctInfiltratorVotes + (p.role === 'innocent' && p.votedForId === actualFox.id ? 1 : 0),
+          accusationVotesReceived: priorStats.accusationVotesReceived + (tally[p.id] || 0),
+          infiltratorRoundsWonWithoutAccusation: priorStats.infiltratorRoundsWonWithoutAccusation +
+            (p.id === actualFox.id && winner === 'fox' && (tally[p.id] || 0) === 0 ? 1 : 0),
+        },
       };
     });
+
+    const isMatchComplete = settings.targetScore > 0 && updatedPlayers.some((p) => p.score >= settings.targetScore);
+    const accolades: Record<string, string[]> = {};
+    updatedPlayers.forEach((p) => {
+      const stats = p.lifetimeStats!;
+      const earned: string[] = [];
+      if (stats.infiltratorRoundsWonWithoutAccusation > 0) earned.push('🎭 Master of Disguise');
+      if (stats.roundsPlayed > 0 && stats.correctInfiltratorVotes === stats.roundsPlayed) earned.push('🔍 Sherlock');
+      accolades[p.id] = earned;
+    });
+    const spender = [...updatedPlayers].sort((a, b) => (b.lifetimeStats?.goldSpent || 0) - (a.lifetimeStats?.goldSpent || 0))[0];
+    if (spender && (spender.lifetimeStats?.goldSpent || 0) > 0) {
+      accolades[spender.id] = [...(accolades[spender.id] || []), '💰 Big Spender'];
+    }
 
     const resolution: RoundResolution = {
       winner,
@@ -1397,6 +1444,8 @@ export default function App() {
       foxGuessWord,
       voteTally: tally,
       pointsAwarded,
+      accolades,
+      isMatchComplete,
     };
 
     setPlayers(updatedPlayers);
@@ -1568,6 +1617,16 @@ export default function App() {
           ...p,
           gold: curGold - cost,
           inventory: currentInv,
+          lifetimeStats: {
+            ...(p.lifetimeStats || {
+              roundsPlayed: 0,
+              correctInfiltratorVotes: 0,
+              accusationVotesReceived: 0,
+              infiltratorRoundsWonWithoutAccusation: 0,
+              goldSpent: 0,
+            }),
+            goldSpent: (p.lifetimeStats?.goldSpent || 0) + cost,
+          },
         };
       }
       return p;
@@ -1607,6 +1666,19 @@ export default function App() {
   const handleUsePotion = (potionId: string) => {
     if (settings.itemsEnabled === false) return;
     if (hasUsedPotionThisTurn) return;
+
+    const potion = POTION_CATALOG.find((item) => item.id === potionId);
+    const roleCompatible = !potion || potion.roleTarget === 'all' ||
+      (potion.roleTarget === 'fox' && activePlayer.role === 'fox') ||
+      (potion.roleTarget === 'innocent' && activePlayer.role === 'innocent');
+    if (!roleCompatible) {
+      setActivePotionToast({
+        message: `${potion?.name || 'That potion'} is unavailable for your current role.`,
+        icon: '🚫',
+        style: 'amber',
+      });
+      return;
+    }
 
     const currentInv = activePlayer.inventory || {};
     const count = currentInv[potionId] || 0;
@@ -2026,7 +2098,7 @@ export default function App() {
     // Join room on the server to get actual room players
     const result = await socketClient.joinRoom(cleanRoomId, guestPlayer, password);
     if (result && result.room && Array.isArray(result.room.players) && result.room.players.length > 0) {
-      setPlayers(result.room.players);
+      setPlayers(sanitizePlayers(result.room.players));
       if (result.room.settings) setSettings((prev) => ({ ...prev, ...result.room.settings }));
       if (result.room.gamePhase) setGamePhase(result.room.gamePhase);
       if (result.room.roundNumber !== undefined) setRoundNumber(result.room.roundNumber);
@@ -2159,7 +2231,6 @@ export default function App() {
         isHost={isHost}
         myPlayerId={myPlayerId}
         onKickPlayer={handleKickPlayer}
-        onOpenOddsBooster={() => setIsInfiltratorBoosterModalOpen(true)}
         myInfiltratorOdds={myInfiltratorOdds}
         myInfiltratorBoostGold={activePlayer.infiltratorBoostGold ?? activePlayer.chameleonBoostGold}
       />
@@ -2219,7 +2290,6 @@ export default function App() {
                 roomId={roomId}
                 onLeaveRoom={handleLeaveRoom}
                 isHost={isHost}
-                onOpenOddsBooster={() => setIsInfiltratorBoosterModalOpen(true)}
                 onUpdateInfiltratorBoost={handleUpdateInfiltratorBoost}
               />
             </motion.div>
@@ -2258,7 +2328,6 @@ export default function App() {
                     pendingClueForged={pendingClueForged}
                     forgedTargetPlayerId={forgedTargetPlayerId}
                     silencedPlayerIds={silencedPlayerIds}
-                    onOpenOddsBooster={() => setIsInfiltratorBoosterModalOpen(true)}
                     itemsEnabled={settings.itemsEnabled !== false}
                     isHost={isHost}
                     onKickPlayer={handleRemovePlayer}
@@ -2280,6 +2349,15 @@ export default function App() {
                     isScrambling={isScrambling}
                     oracleShattered={oracleShattered}
                   />
+                  {settings.itemsEnabled !== false && (
+                    <button
+                      type="button"
+                      onClick={() => setIsInfiltratorBoosterModalOpen(true)}
+                      className="mt-2 w-full rounded-xl border border-amber-500/60 bg-amber-950/80 px-3 py-2 text-xs font-display font-black uppercase tracking-wider text-amber-300 hover:bg-amber-900/90 transition-colors"
+                    >
+                      🕵️ Buy Infiltrator Odds Booster Ticket
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -2291,7 +2369,7 @@ export default function App() {
                 settings={settings}
                 timeLeft={timeLeft}
                 clueInput={clueInput}
-                onChangeClueInput={setClueInput}
+                onChangeClueInput={(value) => setClueInput(sanitizeClue(value))}
                 onSubmitClue={handleSubmitClue}
                 onStartEditClue={handleStartEditClue}
                 isEditingClue={isEditingClue}

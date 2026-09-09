@@ -354,7 +354,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             </div>
 
             {/* Infiltrator Role Odds & Gold Booster Section */}
-            <div className="mt-4 p-3.5 rounded-xl bg-slate-900/90 border-2 border-amber-500/50 shadow-md">
+            <div className="hidden mt-4 p-3.5 rounded-xl bg-slate-900/90 border-2 border-amber-500/50 shadow-md">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xl select-none">🕵️</span>
