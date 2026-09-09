@@ -54,6 +54,15 @@ export interface DiscussionMessage {
   isSilencedAttempt?: boolean;
 }
 
+export interface EmojiReaction {
+  id: string;
+  playerId: string;
+  playerName: string;
+  playerAvatar: string;
+  emoji: string;
+  timestamp: number;
+}
+
 export interface Coordinate {
   col: 'A' | 'B' | 'C' | 'D';
   row: 1 | 2 | 3 | 4;
@@ -111,7 +120,7 @@ export type GamePhase =
 
 export interface RoundResolution {
   winner: 'innocents' | 'fox';
-  reason: 'innocents_caught_fox' | 'fox_stole_win' | 'fox_escaped_undetected';
+  reason: 'innocents_caught_fox' | 'fox_stole_win' | 'fox_escaped_undetected' | 'fox_won_sudden_death';
   foxPlayerId: string;
   foxPlayerName: string;
   accusedPlayerId: string | null;

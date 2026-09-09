@@ -15,6 +15,34 @@ export const PassAndPlayModal: React.FC<PassAndPlayModalProps> = ({
   onConfirmReady,
   gamePhase = 'clue_submission',
 }) => {
+  const [holdProgress, setHoldProgress] = React.useState(0);
+  const holdTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdStartedAtRef = React.useRef(0);
+
+  const cancelHold = React.useCallback(() => {
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    holdStartedAtRef.current = 0;
+    setHoldProgress(0);
+  }, []);
+
+  const startHold = React.useCallback(() => {
+    if (holdTimerRef.current) return;
+    holdStartedAtRef.current = Date.now();
+    holdTimerRef.current = setInterval(() => {
+      const progress = Math.min(1, (Date.now() - holdStartedAtRef.current) / 3000);
+      setHoldProgress(progress);
+      if (progress >= 1) {
+        cancelHold();
+        onConfirmReady();
+      }
+    }, 50);
+  }, [cancelHold, onConfirmReady]);
+
+  React.useEffect(() => cancelHold, [cancelHold, isOpen, player?.id]);
+
   if (!isOpen || !player) return null;
 
   const isVoting = gamePhase === 'voting';
@@ -44,7 +72,18 @@ export const PassAndPlayModal: React.FC<PassAndPlayModalProps> = ({
 
         <div className="pt-3">
           <button
-            onClick={onConfirmReady}
+            type="button"
+            onPointerDown={startHold}
+            onPointerUp={cancelHold}
+            onPointerLeave={cancelHold}
+            onPointerCancel={cancelHold}
+            onKeyDown={(event) => {
+              if (event.key === ' ' || event.key === 'Enter') startHold();
+            }}
+            onKeyUp={(event) => {
+              if (event.key === ' ' || event.key === 'Enter') cancelHold();
+            }}
+            aria-label={`Hold for 3 seconds to reveal ${player.name}'s turn`}
             className="w-full retro-button py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-black text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer"
           >
             {isVoting ? (
@@ -59,6 +98,15 @@ export const PassAndPlayModal: React.FC<PassAndPlayModalProps> = ({
               </>
             )}
           </button>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-800" aria-hidden="true">
+            <div
+              className="h-full rounded-full bg-amber-300 transition-[width]"
+              style={{ width: `${holdProgress * 100}%` }}
+            />
+          </div>
+          <p className="mt-1 text-[10px] font-mono uppercase tracking-wider text-slate-400">
+            Hold for 3 seconds to reveal
+          </p>
         </div>
       </div>
     </div>

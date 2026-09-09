@@ -10,6 +10,8 @@ interface ActionTrayProps {
   players: Player[];
   settings: GameSettings;
   timeLeft: number;
+  voteRound?: number;
+  suddenDeath?: boolean;
   // Clue Entry
   clueInput: string;
   onChangeClueInput: (val: string) => void;
@@ -46,6 +48,8 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
   players,
   settings,
   timeLeft,
+  voteRound = 1,
+  suddenDeath = false,
   clueInput,
   onChangeClueInput,
   onSubmitClue,
@@ -100,21 +104,21 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
   return (
     <section className="retro-card rounded-xl p-4 bg-[#131B2E] border-2 border-slate-700 text-slate-100 mt-4 shadow-xl">
       {/* Turn Timer Bar (if enabled in settings) */}
-      {settings.turnTimer && (gamePhase === 'clue_submission' || gamePhase === 'voting') && (
+      {(settings.turnTimer || (gamePhase === 'voting' && suddenDeath)) && (gamePhase === 'clue_submission' || gamePhase === 'voting') && (
         <div className="mb-3">
           <div className="flex items-center justify-between text-xs font-mono font-bold text-slate-300 mb-1">
             <span className="flex items-center gap-1">
               <Clock className={`w-3.5 h-3.5 ${timeLeft <= 10 ? 'text-rose-400 animate-pulse' : 'text-amber-400'}`} />
-              Timer: {timeLeft}s remaining
+              {suddenDeath ? `Sudden-death revote (${voteRound}/2): ${timeLeft}s` : `Timer: ${timeLeft}s remaining`}
             </span>
-            <span className="text-[11px] text-slate-400">60s Turn Limit</span>
+            <span className="text-[11px] text-slate-400">{suddenDeath ? '20s limit' : `${settings.turnTimerSeconds || 60}s turn limit`}</span>
           </div>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
             <div
               className={`h-full transition-all duration-1000 ${
                 timeLeft <= 10 ? 'bg-rose-500' : 'bg-amber-400'
               }`}
-              style={{ width: `${Math.max(0, (timeLeft / 60) * 100)}%` }}
+              style={{ width: `${Math.max(0, (timeLeft / (suddenDeath ? 20 : settings.turnTimerSeconds || 60)) * 100)}%` }}
             />
           </div>
         </div>
@@ -694,6 +698,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                       {roundResolution.reason === 'innocents_caught_fox' && 'Infiltrator caught & missed secret word!'}
                       {roundResolution.reason === 'fox_stole_win' && 'Infiltrator was caught, but correctly stole the word!'}
                       {roundResolution.reason === 'fox_escaped_undetected' && 'Infiltrator slipped through undetected!'}
+                      {roundResolution.reason === 'fox_won_sudden_death' && 'Infiltrator wins the sudden-death vote!'}
                     </span>
                   </div>
 

@@ -302,6 +302,8 @@ export const RoundResolutionModal: React.FC<RoundResolutionModalProps> = ({
                   'The Infiltrator was voted out, but miraculously deduced the secret word to steal the round!'}
                 {roundResolution.reason === 'fox_escaped_undetected' &&
                   'The Infiltrator successfully blended in unnoticed while someone else took the blame!'}
+                {roundResolution.reason === 'fox_won_sudden_death' &&
+                  'The vote was tied again—or time ran out. The Infiltrator claims the round!'}
               </p>
             </div>
 

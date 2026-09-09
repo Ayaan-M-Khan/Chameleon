@@ -55,6 +55,9 @@ function cleanupRoomAfterPlayerRemoval(room: ServerRoom, removedPlayerId: string
 
   // If host left, reassign host
   if (room.hostId === removedPlayerId && room.players.length > 0) {
+    room.players.forEach((p) => {
+      p.isHost = false;
+    });
     const nextHost = room.players.find((p) => p.isHuman) || room.players[0];
     if (nextHost) {
       room.hostId = nextHost.id;
@@ -84,6 +87,31 @@ function cleanupRoomAfterPlayerRemoval(room: ServerRoom, removedPlayerId: string
   }
 }
 
+function removePlayerFromRoom(roomId: string, playerId: string): ServerRoom | null {
+  const room = rooms.get(roomId);
+  if (!room || !playerId) return room || null;
+
+  const wasPresent = room.players.some((p) => p.id === playerId);
+  if (!wasPresent) return room;
+
+  room.players = room.players.filter((p) => p.id !== playerId);
+  room.lastActive = Date.now();
+  if (room.players.length === 0) {
+    rooms.delete(roomId);
+    return null;
+  }
+
+  cleanupRoomAfterPlayerRemoval(room, playerId);
+  broadcastToRoom(roomId, {
+    type: 'PLAYER_LEFT',
+    playerId,
+    hostId: room.hostId,
+    room,
+  });
+  broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+  return room;
+}
+
 interface ServerRoom {
   id: string;
   password?: string;
@@ -97,6 +125,8 @@ interface ServerRoom {
   secretCoordinate?: any;
   foxPlayerId?: string;
   roundResolution?: any;
+  voteRound?: number;
+  suddenDeath?: boolean;
   settings: ServerGameSettings;
   createdAt: number;
   lastActive: number;
@@ -161,6 +191,8 @@ app.post('/api/rooms/create', (req, res) => {
     gameMode: gameMode || 'room',
     gamePhase: 'lobby',
     roundNumber: 1,
+    voteRound: 1,
+    suddenDeath: false,
     // In room multiplayer, ONLY the host starts in the room! No unsolicited bots.
     players: [
       {
@@ -219,6 +251,8 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
       gameMode: 'room',
       gamePhase: 'lobby',
       roundNumber: 1,
+      voteRound: 1,
+      suddenDeath: false,
       players: player
         ? [
             {
@@ -402,6 +436,7 @@ app.delete('/api/rooms/:roomId/players/:playerId', (req, res) => {
   if (isKick) {
     broadcastToRoom(roomId, { type: 'PLAYER_KICKED', kickedPlayerId: playerId, room });
   } else {
+    broadcastToRoom(roomId, { type: 'PLAYER_LEFT', playerId, hostId: room.hostId, room });
     broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
   }
   res.json({ success: true, room });
@@ -462,6 +497,8 @@ async function startServer() {
               gameMode: 'room',
               gamePhase: 'lobby',
               roundNumber: 1,
+              voteRound: 1,
+              suddenDeath: false,
               players: player ? [{ ...player, isHost: true }] : [],
               selectedCategoryId: 'sports',
               settings: {
@@ -526,6 +563,27 @@ async function startServer() {
               broadcastToRoom(roomId, { type: 'ROOM_SETTINGS_UPDATED', settings: room.settings, room });
             }
           }
+        } else if (data.type === 'REACTION') {
+          const { roomId, playerId, emoji } = data;
+          const allowedEmojis = new Set(['😂', '😱', '🧐', '👏', '🔥', '🤨']);
+          if (roomId === meta.roomId && playerId === meta.playerId && allowedEmojis.has(emoji)) {
+            const room = rooms.get(roomId);
+            const sender = room?.players.find((p) => p.id === playerId);
+            if (room && sender) {
+              room.lastActive = Date.now();
+              broadcastToRoom(roomId, {
+                type: 'REACTION',
+                reaction: {
+                  id: `reaction-${Date.now()}-${playerId}`,
+                  playerId,
+                  playerName: sender.name,
+                  playerAvatar: sender.avatar,
+                  emoji,
+                  timestamp: Date.now(),
+                },
+              });
+            }
+          }
         } else if (data.type === 'LEAVE_ROOM') {
           const { roomId, playerId } = data;
           meta.roomId = undefined;
@@ -533,14 +591,7 @@ async function startServer() {
           if (roomId && playerId) {
             const room = rooms.get(roomId);
             if (room) {
-              room.players = room.players.filter((p) => p.id !== playerId);
-              room.lastActive = Date.now();
-              if (room.players.length === 0) {
-                rooms.delete(roomId);
-              } else {
-                cleanupRoomAfterPlayerRemoval(room, playerId);
-                broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
-              }
+              removePlayerFromRoom(roomId, playerId);
             }
           }
         } else if (data.type === 'KICK_PLAYER') {
@@ -565,7 +616,18 @@ async function startServer() {
     });
 
     ws.on('close', () => {
+      const closedMeta = clients.get(ws);
       clients.delete(ws);
+      if (!closedMeta?.roomId || !closedMeta.playerId) return;
+
+      // A reconnecting tab may already have a newer socket. Do not remove the
+      // player when an older connection closes.
+      const hasReplacement = [...clients.values()].some(
+        (other) => other.roomId === closedMeta.roomId && other.playerId === closedMeta.playerId
+      );
+      if (!hasReplacement) {
+        removePlayerFromRoom(closedMeta.roomId, closedMeta.playerId);
+      }
     });
   });
 
@@ -574,7 +636,6 @@ async function startServer() {
     for (const [ws, meta] of clients.entries()) {
       if (!meta.isAlive) {
         ws.terminate();
-        clients.delete(ws);
         continue;
       }
       meta.isAlive = false;

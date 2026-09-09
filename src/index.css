@@ -1,14 +1,56 @@
 @import "tailwindcss";
 
 @layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  html {
+    min-height: 100dvh;
+    background: #0B0F17;
+  }
+
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     color: #F8FAFC;
     background-color: #0B0F17;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   h1, h2, h3, .font-display {
     font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  }
+
+  @keyframes floatingReaction {
+    0% {
+      opacity: 0;
+      transform: translateY(0) scale(0.7) rotate(-8deg);
+    }
+    12% {
+      opacity: 1;
+    }
+    80% {
+      opacity: 0.95;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-42vh) scale(1.15) rotate(8deg);
+    }
+  }
+
+  .floating-reaction {
+    animation: floatingReaction 3.2s ease-out forwards;
+  }
+
+  @media (max-width: 640px) {
+    .safe-bottom {
+      padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    }
   }
 }
 
@@ -253,6 +295,4 @@
 .animate-lens-pulse {
   animation: lensInspectPulse 1.4s ease-out;
 }
-
-
 

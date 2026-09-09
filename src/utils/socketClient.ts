@@ -1,6 +1,7 @@
 import { GameSettings, Player } from '../types';
 
 export type SocketEventHandler = (data: any) => void;
+export type SocketConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 
 class RealtimeSocketClient {
   private ws: WebSocket | null = null;
@@ -14,16 +15,31 @@ class RealtimeSocketClient {
   private isConnecting: boolean = false;
   private pollInterval: any = null;
   private isManualDisconnect: boolean = false;
+  private reconnectAttempts = 0;
+  private connectionState: SocketConnectionState = 'idle';
+  private readonly reconnectBaseDelay = 500;
+  private readonly reconnectMaxDelay = 30000;
+
+  public getState(): SocketConnectionState {
+    return this.connectionState;
+  }
+
+  private setConnectionState(state: SocketConnectionState) {
+    if (this.connectionState === state) return;
+    this.connectionState = state;
+    this.emit({ type: 'SOCKET_STATE', state });
+  }
 
   public connect(roomId: string, player: Player, password?: string) {
-    this.isManualDisconnect = false;
+    this.disconnect();
     this.roomId = roomId;
     this.playerId = player.id;
     this.player = player;
     this.password = password;
 
-    this.disconnect();
     this.isManualDisconnect = false;
+    this.reconnectAttempts = 0;
+    this.setConnectionState('connecting');
     this.initWebSocket();
     this.startPollingFallback();
   }
@@ -52,6 +68,7 @@ class RealtimeSocketClient {
       }
       this.ws = null;
     }
+    this.setConnectionState('disconnected');
   }
 
   public subscribe(handler: SocketEventHandler): () => void {
@@ -75,7 +92,9 @@ class RealtimeSocketClient {
     if (typeof window === 'undefined') return;
     if (!this.roomId) return;
 
+    if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) return;
     this.isConnecting = true;
+    this.setConnectionState(this.reconnectAttempts > 0 ? 'reconnecting' : 'connecting');
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/ws?roomId=${encodeURIComponent(this.roomId)}&playerId=${encodeURIComponent(
@@ -87,7 +106,10 @@ class RealtimeSocketClient {
       this.ws = socket;
 
       socket.onopen = () => {
+        if (this.ws !== socket) return;
         this.isConnecting = false;
+        this.reconnectAttempts = 0;
+        this.setConnectionState('connected');
         // Send JOIN_ROOM message
         this.send({
           type: 'JOIN_ROOM',
@@ -117,33 +139,57 @@ class RealtimeSocketClient {
       };
 
       socket.onclose = () => {
+        if (this.ws !== socket) return;
         this.ws = null;
+        this.isConnecting = false;
         if (this.pingInterval) clearInterval(this.pingInterval);
         // Do not reconnect if manually disconnected or no roomId
         if (this.isManualDisconnect || !this.roomId) {
           return;
         }
-        // Attempt reconnect after 3 seconds only if room is still active
-        this.reconnectTimeout = setTimeout(() => {
-          if (!this.isManualDisconnect && this.roomId) {
-            this.initWebSocket();
-          }
-        }, 3000);
+        this.scheduleReconnect();
       };
 
       socket.onerror = (err) => {
         console.warn('WebSocket error, falling back to polling:', err);
-        socket.close();
+        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+          socket.close();
+        }
       };
     } catch (e) {
       console.warn('Failed to construct WebSocket, relying on HTTP API:', e);
+      this.isConnecting = false;
+      this.scheduleReconnect();
     }
+  }
+
+  private scheduleReconnect() {
+    if (this.isManualDisconnect || !this.roomId || this.reconnectTimeout) return;
+    const delay = Math.min(
+      this.reconnectMaxDelay,
+      this.reconnectBaseDelay * Math.pow(2, this.reconnectAttempts)
+    );
+    this.reconnectAttempts += 1;
+    this.setConnectionState('reconnecting');
+    this.reconnectTimeout = setTimeout(() => {
+      this.reconnectTimeout = null;
+      if (!this.isManualDisconnect && this.roomId) this.initWebSocket();
+    }, delay);
   }
 
   public send(data: any) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
     }
+  }
+
+  public sendReaction(roomId: string, playerId: string, emoji: string) {
+    this.send({
+      type: 'REACTION',
+      roomId,
+      playerId,
+      emoji,
+    });
   }
 
   // Polling fallback every 3 seconds to guarantee freshness

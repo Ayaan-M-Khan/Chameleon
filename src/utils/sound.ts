@@ -7,6 +7,39 @@ class SoundFX {
   private masterGain: GainNode | null = null;
   public enabled: boolean = true;
   public volume: number = 0.7;
+  private unlockListenersInstalled = false;
+
+  constructor() {
+    this.installUnlockListeners();
+  }
+
+  private installUnlockListeners() {
+    if (typeof window === 'undefined' || this.unlockListenersInstalled) return;
+    this.unlockListenersInstalled = true;
+    const unlock = () => {
+      this.unlock();
+      if (this.ctx?.state === 'running') {
+        window.removeEventListener('pointerdown', unlock);
+        window.removeEventListener('touchstart', unlock);
+        window.removeEventListener('keydown', unlock);
+        this.unlockListenersInstalled = false;
+      }
+    };
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('touchstart', unlock, { passive: true });
+    window.addEventListener('keydown', unlock, { passive: true });
+  }
+
+  /** Resume the audio context from a user gesture (required by mobile browsers). */
+  public unlock() {
+    if (!this.enabled || typeof window === 'undefined') return;
+    const ctx = this.getContext();
+    if (ctx?.state === 'suspended') {
+      void ctx.resume().catch(() => {
+        // Browsers can reject resume until another user gesture.
+      });
+    }
+  }
 
   private getContext(): AudioContext | null {
     if (!this.enabled) return null;
@@ -21,7 +54,9 @@ class SoundFX {
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      void this.ctx.resume().catch(() => {
+        // Playback will be retried from the next user gesture.
+      });
     }
     return this.ctx;
   }

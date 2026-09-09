@@ -36,7 +36,9 @@ import { InfiltratorBoosterModal } from './components/InfiltratorBoosterModal';
 import { HomeView } from './components/HomeView';
 import { parseInviteUrl } from './utils/inviteUrl';
 import { socketClient } from './utils/socketClient';
-import { DiscussionMessage } from './types';
+import { SocketConnectionState } from './utils/socketClient';
+import { DiscussionMessage, EmojiReaction } from './types';
+import { FloatingReactions, ReactionPicker, REACTION_EMOJIS } from './components/FloatingReactions';
 
 // Helper to generate a friendly Room ID
 function generateRoomId(): string {
@@ -156,6 +158,22 @@ function sanitizePlayers(players: Player[]): Player[] {
 }
 
 export default function App() {
+  // Keep layouts usable when mobile browser chrome changes the visual viewport.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const updateViewport = () => {
+      const height = window.visualViewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty('--app-height', `${height}px`);
+    };
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    window.visualViewport?.addEventListener('resize', updateViewport);
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      window.visualViewport?.removeEventListener('resize', updateViewport);
+    };
+  }, []);
+
   // Parse any invite link query or hash parameters on initial load
   const inviteInfo = useRef(parseInviteUrl()).current;
 
@@ -247,6 +265,8 @@ export default function App() {
 
   // Turn timer
   const [timeLeft, setTimeLeft] = useState(60);
+  const [voteRound, setVoteRound] = useState(1);
+  const [suddenDeath, setSuddenDeath] = useState(false);
 
   // Modals
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
@@ -287,6 +307,7 @@ export default function App() {
 
   // Round discussion and accusations messages
   const [discussionMessages, setDiscussionMessages] = useState<DiscussionMessage[]>([]);
+  const [floatingReactions, setFloatingReactions] = useState<EmojiReaction[]>([]);
 
   // Pass and play states
   const [passAndPlayIndex, setPassAndPlayIndex] = useState(0);
@@ -294,13 +315,14 @@ export default function App() {
 
   // Multiplayer Broadcast channel
   const [peerCount, setPeerCount] = useState(0);
+  const [connectionState, setConnectionState] = useState<SocketConnectionState>(socketClient.getState());
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
   // Active player is this client's player (or pass and play current turn)
   const myPlayer = players.find((p) => p.id === myPlayerId) || players[0] || INITIAL_PLAYERS[0];
   const activePlayer =
-    gameMode === 'pass_and_play' && (gamePhase === 'clue_submission' || gamePhase === 'fox_guess')
-      ? players[passAndPlayIndex] || myPlayer
+    gameMode === 'pass_and_play' && (gamePhase === 'clue_submission' || gamePhase === 'voting' || gamePhase === 'fox_guess')
+      ? players.filter((p) => p.isHuman)[passAndPlayIndex] || myPlayer
       : myPlayer;
 
   const isHost =
@@ -347,6 +369,10 @@ export default function App() {
   // Setup Realtime WebSocket and BroadcastChannel Sync
   useEffect(() => {
     const unsubscribe = socketClient.subscribe((event) => {
+      if (event.type === 'SOCKET_STATE') {
+        setConnectionState(event.state as SocketConnectionState);
+        return;
+      }
       // If user is at home or not in a room, completely ignore room events
       if (gamePhaseRef.current === 'home' || !roomIdRef.current) {
         return;
@@ -380,6 +406,16 @@ export default function App() {
           if (event.room.roundResolution) setIsResolutionModalOpen(true);
         }
         if (event.room.roundNumber !== undefined) setRoundNumber(event.room.roundNumber);
+        if (event.room.voteRound !== undefined) setVoteRound(event.room.voteRound);
+        if (event.room.suddenDeath !== undefined) setSuddenDeath(Boolean(event.room.suddenDeath));
+      } else if (event.type === 'REACTION' && event.reaction) {
+        if (!roomIdRef.current) return;
+        const reaction = event.reaction as EmojiReaction;
+        if (!REACTION_EMOJIS.includes(reaction.emoji)) return;
+        setFloatingReactions((previous) => [...previous.slice(-19), reaction]);
+        window.setTimeout(() => {
+          setFloatingReactions((previous) => previous.filter((item) => item.id !== reaction.id));
+        }, 3200);
       } else if (event.type === 'ROOM_SETTINGS_UPDATED' && event.settings) {
         if (event.room && event.room.id !== roomIdRef.current) return;
         setSettings((prev) => ({ ...prev, ...event.settings }));
@@ -404,6 +440,26 @@ export default function App() {
       unsubscribe();
     };
   }, [myPlayerId]);
+
+  const handleSendReaction = useCallback((emoji: string) => {
+    if (!REACTION_EMOJIS.includes(emoji)) return;
+    const reaction: EmojiReaction = {
+      id: `reaction-${Date.now()}-${myPlayerId}`,
+      playerId: myPlayerId,
+      playerName: activePlayer.name,
+      playerAvatar: activePlayer.avatar,
+      emoji,
+      timestamp: Date.now(),
+    };
+    if (gameMode === 'room' && roomId) {
+      socketClient.sendReaction(roomId, myPlayerId, emoji);
+    } else {
+      setFloatingReactions((previous) => [...previous.slice(-19), reaction]);
+      window.setTimeout(() => {
+        setFloatingReactions((previous) => previous.filter((item) => item.id !== reaction.id));
+      }, 3200);
+    }
+  }, [activePlayer.avatar, activePlayer.name, gameMode, myPlayerId, roomId]);
 
   // Setup BroadcastChannel for Room Multiplayer fallback
   useEffect(() => {
@@ -442,6 +498,8 @@ export default function App() {
           setRoundResolution(data.roundResolution);
           setIsResolutionModalOpen(true);
         }
+        if (data.voteRound !== undefined) setVoteRound(data.voteRound);
+        if (data.suddenDeath !== undefined) setSuddenDeath(Boolean(data.suddenDeath));
       }
     };
 
@@ -462,15 +520,19 @@ export default function App() {
       foxPlayerId,
       roundResolution: res !== undefined ? res : roundResolution,
       roundNumber: currentRound !== undefined ? currentRound : roundNumber,
+      voteRound,
+      suddenDeath,
     });
-  }, [gameMode, gamePhase, players, category, secretCoordinate, foxPlayerId, roundResolution, roundNumber]);
+  }, [gameMode, gamePhase, players, category, secretCoordinate, foxPlayerId, roundResolution, roundNumber, voteRound, suddenDeath]);
 
   // Turn timer effect
   useEffect(() => {
-    if (!settings.turnTimer) return;
+    const timerEnabled = settings.turnTimer || (gamePhase === 'voting' && suddenDeath);
+    if (!timerEnabled) return;
     if (gamePhase !== 'clue_submission' && gamePhase !== 'voting') return;
 
-    setTimeLeft(settings.turnTimerSeconds || 60);
+    const duration = gamePhase === 'voting' && suddenDeath ? 20 : (settings.turnTimerSeconds || 60);
+    setTimeLeft(duration);
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -479,7 +541,11 @@ export default function App() {
           if (gamePhase === 'clue_submission') {
             autoSubmitCurrentClue();
           } else if (gamePhase === 'voting') {
-            autoSubmitCurrentVote();
+            if (suddenDeath) {
+              if (gameMode !== 'room' || isHost) resolveSuddenDeathTimeout();
+            } else {
+              autoSubmitCurrentVote();
+            }
           }
           return 0;
         }
@@ -491,7 +557,7 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [gamePhase, settings.turnTimer, settings.turnTimerSeconds, soundEnabled]);
+  }, [gamePhase, settings.turnTimer, settings.turnTimerSeconds, soundEnabled, suddenDeath, gameMode, isHost]);
 
   // Setup New Round
   const startNewRound = useCallback((keepScores = true, targetRoundNumber?: number) => {
@@ -657,6 +723,8 @@ export default function App() {
 
     setGamePhase('clue_submission');
     gamePhaseRef.current = 'clue_submission';
+    setVoteRound(1);
+    setSuddenDeath(false);
 
     if (gameMode === 'room' && roomId) {
       socketClient.syncState(roomId, {
@@ -667,6 +735,8 @@ export default function App() {
         secretCoordinate: coord,
         foxPlayerId: assignedFoxId,
         roundResolution: null,
+        voteRound: 1,
+        suddenDeath: false,
       });
     }
 
@@ -987,6 +1057,8 @@ export default function App() {
     setPlayers(finalWithForgedClues);
     setGamePhase('voting');
     gamePhaseRef.current = 'voting';
+    setVoteRound(1);
+    setSuddenDeath(false);
     sound.voteStart();
     setSelectedVoteTargetId(null);
 
@@ -999,6 +1071,8 @@ export default function App() {
       socketClient.syncState(roomId, {
         gamePhase: 'voting',
         players: finalWithForgedClues,
+        voteRound: 1,
+        suddenDeath: false,
       });
     }
     broadcastState('voting', finalWithForgedClues);
@@ -1060,6 +1134,18 @@ export default function App() {
         evaluateVotingTally(updated);
       }, 250);
     }
+  };
+
+  const resolveSuddenDeathTimeout = () => {
+    if (gamePhaseRef.current !== 'voting') return;
+    const currentPlayers = players;
+    const actualFox = currentPlayers.find((p) => p.role === 'fox') || currentPlayers[0];
+    if (!actualFox) return;
+    const tally: Record<string, number> = {};
+    currentPlayers.forEach((p) => {
+      if (p.votedForId) tally[p.votedForId] = (tally[p.votedForId] || 0) + 1;
+    });
+    resolveRound(false, undefined, currentPlayers, tally, null, actualFox, 'fox_won_sudden_death');
   };
 
   const autoSubmitCurrentVote = () => {
@@ -1219,6 +1305,7 @@ export default function App() {
 
   // Evaluate votes and determine if Fox was caught
   const evaluateVotingTally = (votedPlayers: Player[]) => {
+    if (gamePhaseRef.current !== 'voting') return;
     // Strict requirement: MUST wait for everyone to put in their vote before showing results!
     if (!votedPlayers.every((p) => Boolean(p.votedForId))) {
       return;
@@ -1257,7 +1344,34 @@ export default function App() {
     const actualFox = votedPlayers.find((p) => p.role === 'fox') || votedPlayers[0];
     const caughtFox = votedPlayers.find((p) => p.id === accusedId && p.role === 'fox') || actualFox;
 
-    // If there's a tie, the Fox escapes undetected; otherwise if accused player has role 'fox', they were caught!
+    // A first-round tie gets one private 20-second sudden-death revote.
+    // A second tie immediately awards the round to the infiltrator.
+    if (isTie) {
+      if (suddenDeath) {
+        resolveRound(false, undefined, votedPlayers, tally, null, actualFox, 'fox_won_sudden_death');
+        return;
+      }
+
+      const revotePlayers = votedPlayers.map((p) => ({ ...p, votedForId: null }));
+      setPlayers(revotePlayers);
+      setSelectedVoteTargetId(null);
+      setVoteRound(2);
+      setSuddenDeath(true);
+      setTimeLeft(20);
+      sound.voteStart();
+      if (gameMode === 'room' && roomId) {
+        socketClient.syncState(roomId, {
+          gamePhase: 'voting',
+          players: revotePlayers,
+          voteRound: 2,
+          suddenDeath: true,
+        });
+        broadcastState('voting', revotePlayers);
+      }
+      return;
+    }
+
+    // Otherwise, if the accused player has the infiltrator role, they were caught.
     const accusedIsFox = votedPlayers.some((p) => p.role === 'fox' && p.id === accusedId);
     const foxWasCaught = !isTie && accusedId !== null && accusedIsFox;
 
@@ -1269,7 +1383,7 @@ export default function App() {
 
       if (gameMode === 'pass_and_play') {
         // Specifically switch pass-and-play turn to the caught Infiltrator
-        const chamIdx = votedPlayers.findIndex((p) => p.id === targetFox.id);
+        const chamIdx = votedPlayers.filter((p) => p.isHuman).findIndex((p) => p.id === targetFox.id);
         if (chamIdx !== -1) {
           setPassAndPlayIndex(chamIdx);
           setIsPassAndPlayModalOpen(true);
@@ -1309,7 +1423,7 @@ export default function App() {
         }, 500);
       }
     } else {
-      // Fox escaped undetected! Innocents voted for someone else or tied
+      // Fox escaped undetected! Innocents voted for someone else.
       sound.victory();
       setCaughtInfiltratorId(null);
       resolveRound(false, undefined, votedPlayers, tally, accusedPlayer, actualFox);
@@ -1342,13 +1456,14 @@ export default function App() {
     currentPlayers: Player[],
     tally: Record<string, number>,
     accusedPlayer: Player | null,
-    actualFox: Player
+    actualFox: Player,
+    forcedReason?: RoundResolution['reason']
   ) => {
     const targetWord = secretCoordinate?.item || '';
     const pointsAwarded: Record<string, { points: number; explanation: string }> = {};
 
     let winner: 'innocents' | 'fox';
-    let reason: 'innocents_caught_fox' | 'fox_stole_win' | 'fox_escaped_undetected';
+    let reason: RoundResolution['reason'];
 
     const innocentCatchPts = settings.innocentCatchPoints || 2;
     const infiltratorStealPts = settings.infiltratorStealPoints ?? settings.chameleonStealPoints ?? 1;
@@ -1386,10 +1501,12 @@ export default function App() {
     } else {
       // Fox escapes undetected
       winner = 'fox';
-      reason = 'fox_escaped_undetected';
+      reason = forcedReason || 'fox_escaped_undetected';
       pointsAwarded[actualFox.id] = {
         points: infiltratorEscapePts,
-        explanation: `Escaped undetected by blending in (+${infiltratorEscapePts} pts)!`,
+        explanation: forcedReason === 'fox_won_sudden_death'
+          ? `Won the sudden-death vote (+${infiltratorEscapePts} pts)!`
+          : `Escaped undetected by blending in (+${infiltratorEscapePts} pts)!`,
       };
     }
 
@@ -1463,6 +1580,7 @@ export default function App() {
     setPlayers(updatedPlayers);
     setRoundResolution(resolution);
     setGamePhase('round_resolution');
+    gamePhaseRef.current = 'round_resolution';
     setIsFoxGuessModalOpen(false);
     setIsResolutionModalOpen(true);
 
@@ -2114,6 +2232,8 @@ export default function App() {
       if (result.room.settings) setSettings((prev) => ({ ...prev, ...result.room.settings }));
       if (result.room.gamePhase) setGamePhase(result.room.gamePhase);
       if (result.room.roundNumber !== undefined) setRoundNumber(result.room.roundNumber);
+      if (result.room.voteRound !== undefined) setVoteRound(result.room.voteRound);
+      if (result.room.suddenDeath !== undefined) setSuddenDeath(Boolean(result.room.suddenDeath));
       if (result.room.selectedCategoryId) setSelectedCategoryId(result.room.selectedCategoryId);
       if (result.room.category) setCategory(result.room.category);
     } else {
@@ -2225,7 +2345,7 @@ export default function App() {
     (caughtInfiltratorId ? activePlayer.id === caughtInfiltratorId : activePlayer.id === foxPlayerId);
 
   return (
-    <div className="min-h-screen bg-dark-pattern flex flex-col selection:bg-emerald-500 selection:text-slate-950 pb-8 text-slate-100">
+    <div className="min-h-[100dvh] bg-dark-pattern flex flex-col selection:bg-emerald-500 selection:text-slate-950 pb-8 text-slate-100" style={{ minHeight: 'var(--app-height, 100dvh)' }}>
       {/* Header Bar */}
       <HeaderBar
         roomId={roomId}
@@ -2238,6 +2358,7 @@ export default function App() {
         onOpenRules={() => setIsRulesOpen(true)}
         onLeaveRoom={handleLeaveRoom}
         peerCount={peerCount}
+        connectionState={connectionState}
         roomPassword={settings.roomPassword}
         players={players}
         isHost={isHost}
@@ -2247,8 +2368,15 @@ export default function App() {
         myInfiltratorBoostGold={activePlayer.infiltratorBoostGold ?? activePlayer.chameleonBoostGold}
       />
 
+      <FloatingReactions reactions={floatingReactions} />
+      {gamePhase !== 'home' && (
+        <div className="safe-bottom fixed bottom-3 right-3 z-30">
+          <ReactionPicker onReact={handleSendReaction} />
+        </div>
+      )}
+
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 flex flex-col">
+      <main className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 flex flex-col">
         <AnimatePresence mode="wait">
           {gamePhase === 'home' ? (
             /* HOMEPAGE VIEW */
@@ -2344,6 +2472,7 @@ export default function App() {
                 {/* RIGHT COLUMN: 4x4 Grid Card & Banners (5 cols on lg/xl) */}
                 <div className="lg:col-span-5 flex flex-col">
                   <RightColumnGrid
+                    key={`${activePlayer.id}-${gamePhase}`}
                     category={category}
                     role={activePlayer.role}
                     secretCoordinate={secretCoordinate}
@@ -2375,6 +2504,8 @@ export default function App() {
                 players={players}
                 settings={settings}
                 timeLeft={timeLeft}
+                voteRound={voteRound}
+                suddenDeath={suddenDeath}
                 clueInput={clueInput}
                 onChangeClueInput={(value) => setClueInput(sanitizeClue(value))}
                 onSubmitClue={handleSubmitClue}

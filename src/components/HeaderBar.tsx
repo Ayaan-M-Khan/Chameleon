@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Volume2, VolumeX, HelpCircle, Settings, LogOut, Users, Bot, Share2, Check, Copy, X, UserMinus } from 'lucide-react';
 import { GameMode, GamePhase, Player } from '../types';
 import { buildRoomInviteUrl } from '../utils/inviteUrl';
+import { SocketConnectionState } from '../utils/socketClient';
 
 interface HeaderBarProps {
   roomId: string;
@@ -14,6 +15,7 @@ interface HeaderBarProps {
   onOpenRules: () => void;
   onLeaveRoom: () => void;
   peerCount: number;
+  connectionState?: SocketConnectionState;
   roomPassword?: string;
   players?: Player[];
   isHost?: boolean;
@@ -37,6 +39,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   onOpenRules,
   onLeaveRoom,
   peerCount,
+  connectionState = 'idle',
   roomPassword,
   players = [],
   isHost = false,
@@ -185,13 +188,19 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           {isInRoom && (
             <div className="hidden sm:flex items-center gap-2 text-xs font-semibold">
               <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  connectionState === 'connected' ? 'bg-emerald-400' : 'bg-amber-400'
+                }`}></span>
+                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                  connectionState === 'connected' ? 'bg-emerald-500' : 'bg-amber-500'
+                }`}></span>
               </span>
               <span className="text-slate-300 hidden md:inline">
                 {gameMode === 'solo' && 'Local Solo (AI Active)'}
                 {gameMode === 'pass_and_play' && 'Pass & Play'}
-                {gameMode === 'room' && `Online (${peerCount + 1} connected)`}
+                {gameMode === 'room' && (connectionState === 'connected'
+                  ? `Online (${peerCount + 1} connected)`
+                  : connectionState === 'reconnecting' ? 'Reconnecting…' : 'Connecting…')}
               </span>
             </div>
           )}
