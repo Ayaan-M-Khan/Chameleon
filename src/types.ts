@@ -42,6 +42,9 @@ export interface Player {
   isReadyToLeaveShop?: boolean;
   personality?: BotPersonality;
   lifetimeStats?: LifetimeMatchStats;
+  isDisconnected?: boolean;
+  disconnectedAt?: number;
+  sessionToken?: string;
 }
 
 export interface DiscussionMessage {

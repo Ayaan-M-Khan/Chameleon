@@ -178,10 +178,14 @@ export default function App() {
   // Parse any invite link query or hash parameters on initial load
   const inviteInfo = useRef(parseInviteUrl()).current;
 
+  // Cached session check on startup
+  const cachedSession = useRef(typeof window !== 'undefined' ? socketClient.getCachedSession() : null).current;
+
   // Player ID stored per browser session
   const myPlayerId = useRef<string>(
     typeof window !== 'undefined'
       ? (() => {
+          if (cachedSession?.playerId) return cachedSession.playerId;
           const stored = sessionStorage.getItem('infiltrator_player_id') || sessionStorage.getItem('chameleon_player_id');
           if (stored) return stored;
           const gen = `p-${Math.random().toString(36).substring(2, 8)}`;
@@ -191,9 +195,10 @@ export default function App() {
       : 'player-1'
   ).current;
 
-  // Room ID: strictly empty on startup unless a valid invite link was provided
+  // Room ID: strictly empty on startup unless a valid invite link was provided or cachedSession exists
   const [roomId, setRoomId] = useState<string>(() => {
     if (inviteInfo.roomId) return inviteInfo.roomId;
+    if (cachedSession?.roomId) return cachedSession.roomId;
     if (typeof window !== 'undefined') {
       const hash = window.location.hash.replace('#', '').trim();
       if (hash && (hash.startsWith('INF-') || hash.startsWith('CHAM-') || hash.startsWith('FOX-'))) return hash;
@@ -203,11 +208,12 @@ export default function App() {
 
   // Core Game State
   const [gameMode, setGameMode] = useState<GameMode>(() => {
-    if (inviteInfo.roomId) return 'room';
+    if (inviteInfo.roomId || cachedSession?.roomId) return 'room';
     return 'solo';
   });
   const [gamePhase, setGamePhase] = useState<GamePhase>(() => {
     if (inviteInfo.autoJoin && inviteInfo.roomId) return 'lobby';
+    if (cachedSession?.roomId) return 'lobby';
     return 'home';
   });
   const [roundNumber, setRoundNumber] = useState(1);
@@ -379,8 +385,25 @@ export default function App() {
         return;
       }
 
-      if (event.type === 'ROOM_STATE_SYNC' && event.room) {
-        if (event.room.id !== roomIdRef.current) return;
+      if (event.type === 'SESSION_RECONNECT_FAILED') {
+        console.warn('Session reconnection failed:', event.reason);
+        socketClient.clearSession();
+        setGameMode('solo');
+        setGamePhase('home');
+        setRoomId('');
+        roomIdRef.current = '';
+        return;
+      }
+
+      if ((event.type === 'ROOM_STATE_SYNC' || event.type === 'SESSION_RECONNECTED' || event.type === 'PLAYER_DISCONNECTED') && event.room) {
+        if (event.type === 'SESSION_RECONNECTED') {
+          setRoomId(event.room.id);
+          roomIdRef.current = event.room.id;
+          setGameMode('room');
+        } else if (event.room.id !== roomIdRef.current) {
+          return;
+        }
+
         // Verify this player hasn't left or been removed from the room
         const amInRoom = event.room.players?.some((p) => p.id === myPlayerId);
         if (!amInRoom) {
@@ -849,10 +872,11 @@ export default function App() {
       broadcastState('clue_submission', updated);
     }
 
-    if (updated.every((p) => p.hasSubmittedClue)) {
+    const activeParticipants = updated.filter((p) => !p.isDisconnected);
+    if (activeParticipants.length >= 2 && activeParticipants.every((p) => p.hasSubmittedClue)) {
       transitionToVoting(updated);
     } else {
-      const hasBots = updated.some((p) => !p.isHuman && !p.hasSubmittedClue);
+      const hasBots = activeParticipants.some((p) => !p.isHuman && !p.hasSubmittedClue);
       if (hasBots && (gameMode !== 'room' || isHost)) {
         processBotClues(updated, 1500);
       }
@@ -894,14 +918,15 @@ export default function App() {
       }
     }
 
+    const activeParticipants = updated.filter((p) => !p.isDisconnected);
     // Strict requirement: MUST wait for everyone to input their clue before starting voting section!
-    if (updated.every((p) => p.hasSubmittedClue)) {
+    if (activeParticipants.length >= 2 && activeParticipants.every((p) => p.hasSubmittedClue)) {
       transitionToVoting(updated);
       return;
     }
 
     // If there are unsubmitted AI bots, trigger their clues with staggered delays
-    const hasUnsubmittedBots = updated.some((p) => !p.isHuman && !p.hasSubmittedClue);
+    const hasUnsubmittedBots = activeParticipants.some((p) => !p.isHuman && !p.hasSubmittedClue);
     if (hasUnsubmittedBots && (gameMode !== 'room' || isHost)) {
       processBotClues(updated, 1800);
     }
@@ -942,11 +967,12 @@ export default function App() {
     overrideCat?: Category
   ) => {
     clearBotTimeouts();
-    const unsubmittedBots = currentPlayers.filter((p) => !p.isHuman && !p.hasSubmittedClue);
+    const activeParticipants = currentPlayers.filter((p) => !p.isDisconnected);
+    const unsubmittedBots = activeParticipants.filter((p) => !p.isHuman && !p.hasSubmittedClue);
 
     if (unsubmittedBots.length === 0) {
-      // Check if all players have submitted
-      if (currentPlayers.every((p) => p.hasSubmittedClue)) {
+      // Check if all active players have submitted
+      if (activeParticipants.length >= 2 && activeParticipants.every((p) => p.hasSubmittedClue)) {
         transitionToVoting(currentPlayers);
       }
       return;
@@ -994,12 +1020,14 @@ export default function App() {
 
           sound.click();
 
-          // Check if EVERY player has now submitted their clue
-          if (nextPlayers.every((p) => p.hasSubmittedClue)) {
+          // Check if EVERY active player has now submitted their clue
+          const activeParticipants = nextPlayers.filter((p) => !p.isDisconnected);
+          if (activeParticipants.length >= 2 && activeParticipants.every((p) => p.hasSubmittedClue)) {
             const finishTimer = setTimeout(() => {
               setPlayers((latest) => {
+                const latestActive = latest.filter((p) => !p.isDisconnected);
                 // Strict requirement: MUST wait for everyone to input their clue before starting voting section!
-                if (latest.every((p) => p.hasSubmittedClue)) {
+                if (latestActive.length >= 2 && latestActive.every((p) => p.hasSubmittedClue)) {
                   transitionToVoting(latest);
                 }
                 return latest;
@@ -1079,11 +1107,12 @@ export default function App() {
     broadcastState('voting', finalWithForgedClues);
   };
 
-  // Automatically transition from clues to voting when all remaining players have submitted clues
+  // Automatically transition from clues to voting when all remaining active players have submitted clues
   useEffect(() => {
     if (gamePhase !== 'clue_submission') return;
     if (isEditingClue) return;
-    if (players.length >= 3 && players.every((p) => p.hasSubmittedClue)) {
+    const activeParticipants = players.filter((p) => !p.isDisconnected);
+    if (activeParticipants.length >= 2 && activeParticipants.every((p) => p.hasSubmittedClue)) {
       if (gameMode !== 'room' || isHost) {
         const timer = setTimeout(() => {
           transitionToVoting(players);
@@ -1122,15 +1151,16 @@ export default function App() {
       }
     }
 
+    const activeParticipants = updated.filter((p) => !p.isDisconnected);
     // Check if there are unsubmitted AI bots that need to vote
-    const hasUnsubmittedBots = updated.some((p) => !p.isHuman && !p.votedForId);
+    const hasUnsubmittedBots = activeParticipants.some((p) => !p.isHuman && !p.votedForId);
     if (hasUnsubmittedBots && (gameMode !== 'room' || isHost)) {
       processBotVotes(updated);
       return;
     }
 
-    // Strict requirement: MUST wait for everyone to put in their vote before showing results!
-    if (updated.every((p) => Boolean(p.votedForId))) {
+    // Strict requirement: MUST wait for everyone active to put in their vote before showing results!
+    if (activeParticipants.length >= 2 && activeParticipants.every((p) => Boolean(p.votedForId))) {
       setTimeout(() => {
         evaluateVotingTally(updated);
       }, 250);
@@ -1172,11 +1202,12 @@ export default function App() {
 
   // Process AI Bot Votes with realistic deliberation stagger
   const processBotVotes = (currentPlayers: Player[]) => {
-    const unvotedBots = currentPlayers.filter((p) => !p.isHuman && !p.votedForId);
+    const activeParticipants = currentPlayers.filter((p) => !p.isDisconnected);
+    const unvotedBots = activeParticipants.filter((p) => !p.isHuman && !p.votedForId);
 
     if (unvotedBots.length === 0) {
-      // Check if everyone has voted
-      if (currentPlayers.every((p) => Boolean(p.votedForId))) {
+      // Check if everyone active has voted
+      if (activeParticipants.length >= 2 && activeParticipants.every((p) => Boolean(p.votedForId))) {
         setTimeout(() => {
           evaluateVotingTally(currentPlayers);
         }, 250);
@@ -1206,12 +1237,13 @@ export default function App() {
 
           sound.click();
 
-          // Check if this was the last bot AND if everyone has voted
+          // Check if this was the last bot AND if everyone active has voted
           if (idx === unvotedBots.length - 1) {
             setTimeout(() => {
               setPlayers((latest) => {
-                // Strict requirement: MUST wait for everyone to put in their vote before showing results!
-                if (latest.every((p) => Boolean(p.votedForId))) {
+                const latestActive = latest.filter((p) => !p.isDisconnected);
+                // Strict requirement: MUST wait for everyone active to put in their vote before showing results!
+                if (latestActive.length >= 2 && latestActive.every((p) => Boolean(p.votedForId))) {
                   evaluateVotingTally(latest);
                 }
                 return latest;
@@ -1226,10 +1258,11 @@ export default function App() {
     });
   };
 
-  // Automatically evaluate voting tally as soon as ALL players have cast their votes
+  // Automatically evaluate voting tally as soon as ALL active players have cast their votes
   useEffect(() => {
     if (gamePhase !== 'voting') return;
-    if (players.length > 0 && players.every((p) => Boolean(p.votedForId))) {
+    const activeParticipants = players.filter((p) => !p.isDisconnected);
+    if (activeParticipants.length >= 2 && activeParticipants.every((p) => Boolean(p.votedForId))) {
       if (gameMode !== 'room' || isHost) {
         const timer = setTimeout(() => {
           evaluateVotingTally(players);
@@ -2246,10 +2279,57 @@ export default function App() {
     setGamePhase('lobby');
   };
 
-  // Auto-join if user loaded via direct invite link with autoJoin flag
+  // Auto-join if user loaded via direct invite link with autoJoin flag, OR reconnect cached session on tab refresh!
   useEffect(() => {
     if (inviteInfo.autoJoin && inviteInfo.roomId) {
       handleJoinRoom(inviteInfo.roomId, 'Player 2', '🕵️', inviteInfo.password);
+    } else if (cachedSession && cachedSession.roomId && cachedSession.sessionToken) {
+      const { roomId: cRoomId, playerId: cPlayerId, sessionToken: cToken, playerName, playerAvatar } = cachedSession;
+      setRoomId(cRoomId);
+      roomIdRef.current = cRoomId;
+      setGameMode('room');
+      const placeholderPlayer: Player = {
+        id: cPlayerId,
+        name: playerName || 'Player',
+        avatar: playerAvatar || '🦊',
+        isHuman: true,
+        isHost: false,
+        score: 0,
+        role: 'innocent',
+        clue: '',
+        hasSubmittedClue: false,
+        votedForId: null,
+        isReady: true,
+        sessionToken: cToken,
+      };
+      socketClient.reconnectSession(cRoomId, cPlayerId, cToken, placeholderPlayer);
+      socketClient.reconnectSessionRest(cRoomId, cPlayerId, cToken).then((res) => {
+        if (res?.room) {
+          const room = res.room;
+          if (room.players) setPlayers(sanitizePlayers(room.players));
+          if (room.settings) setSettings((prev) => ({ ...prev, ...room.settings }));
+          if (room.gamePhase) {
+            setGamePhase(room.gamePhase);
+            gamePhaseRef.current = room.gamePhase;
+          }
+          if (room.category) {
+            setCategory(room.category);
+            categoryRef.current = room.category;
+          }
+          if (room.secretCoordinate !== undefined) {
+            setSecretCoordinate(room.secretCoordinate);
+            secretCoordinateRef.current = room.secretCoordinate;
+          }
+          if (room.foxPlayerId !== undefined) setFoxPlayerId(room.foxPlayerId);
+          if (room.roundResolution !== undefined) {
+            setRoundResolution(room.roundResolution);
+            if (room.roundResolution) setIsResolutionModalOpen(true);
+          }
+          if (room.roundNumber !== undefined) setRoundNumber(room.roundNumber);
+          if (room.voteRound !== undefined) setVoteRound(room.voteRound);
+          if (room.suddenDeath !== undefined) setSuddenDeath(Boolean(room.suddenDeath));
+        }
+      });
     }
   }, []);
 
@@ -2261,6 +2341,7 @@ export default function App() {
     // 1. Notify server and cleanly close socket/polling connections
     const currentRoomId = roomId;
     const currentPlayerId = myPlayerId;
+    socketClient.clearSession();
     if (currentRoomId) {
       socketClient.leaveRoom(currentRoomId, currentPlayerId);
     } else {

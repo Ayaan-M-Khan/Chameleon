@@ -3,16 +3,29 @@ import { GameSettings, Player } from '../types';
 export type SocketEventHandler = (data: any) => void;
 export type SocketConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 
+export interface CachedSession {
+  roomId: string;
+  playerId: string;
+  sessionToken: string;
+  playerName?: string;
+  playerAvatar?: string;
+  savedAt: number;
+}
+
+const SESSION_STORAGE_KEY = 'the_infiltrator_multiplayer_session';
+
 class RealtimeSocketClient {
   private ws: WebSocket | null = null;
   private roomId: string = '';
   private playerId: string = '';
+  private sessionToken: string = '';
   private player: Player | null = null;
   private password?: string;
   private listeners: Set<SocketEventHandler> = new Set();
   private reconnectTimeout: any = null;
   private pingInterval: any = null;
   private isConnecting: boolean = false;
+  private isReconnectingSession: boolean = false;
   private pollInterval: any = null;
   private isManualDisconnect: boolean = false;
   private reconnectAttempts = 0;
@@ -22,6 +35,60 @@ class RealtimeSocketClient {
 
   public getState(): SocketConnectionState {
     return this.connectionState;
+  }
+
+  public getSessionToken(): string {
+    return this.sessionToken;
+  }
+
+  public getCachedSession(): CachedSession | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as CachedSession;
+      if (parsed?.roomId && parsed?.playerId && parsed?.sessionToken) {
+        return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse cached session:', e);
+    }
+    return null;
+  }
+
+  public saveSession(roomId: string, player: Player, sessionToken?: string): string {
+    if (typeof window === 'undefined' || !roomId || !player?.id) return '';
+    try {
+      const token =
+        sessionToken ||
+        player.sessionToken ||
+        this.sessionToken ||
+        `tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      this.sessionToken = token;
+      player.sessionToken = token;
+      const sessionData: CachedSession = {
+        roomId,
+        playerId: player.id,
+        sessionToken: token,
+        playerName: player.name,
+        playerAvatar: player.avatar,
+        savedAt: Date.now(),
+      };
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+      return token;
+    } catch (e) {
+      console.warn('Failed to save session to sessionStorage:', e);
+      return '';
+    }
+  }
+
+  public clearSession() {
+    if (typeof window === 'undefined') return;
+    try {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch (e) {}
+    this.sessionToken = '';
+    this.isReconnectingSession = false;
   }
 
   private setConnectionState(state: SocketConnectionState) {
@@ -37,6 +104,10 @@ class RealtimeSocketClient {
     this.player = player;
     this.password = password;
 
+    const token = this.saveSession(roomId, player);
+    this.sessionToken = token;
+    this.isReconnectingSession = false;
+
     this.isManualDisconnect = false;
     this.reconnectAttempts = 0;
     this.setConnectionState('connecting');
@@ -44,8 +115,41 @@ class RealtimeSocketClient {
     this.startPollingFallback();
   }
 
-  public disconnect() {
+  public reconnectSession(roomId: string, playerId: string, sessionToken: string, existingPlayer?: Player) {
+    this.disconnect(false);
+    this.roomId = roomId;
+    this.playerId = playerId;
+    this.sessionToken = sessionToken;
+    this.player =
+      existingPlayer ||
+      this.player ||
+      ({
+        id: playerId,
+        name: 'Reconnecting...',
+        avatar: '🦊',
+        isHuman: true,
+        isHost: false,
+        score: 0,
+        role: 'innocent',
+        clue: '',
+        hasSubmittedClue: false,
+        votedForId: null,
+        isReady: false,
+        sessionToken,
+      } as Player);
+    this.isReconnectingSession = true;
+    this.isManualDisconnect = false;
+    this.reconnectAttempts = 0;
+    this.setConnectionState('connecting');
+    this.initWebSocket();
+    this.startPollingFallback();
+  }
+
+  public disconnect(clearCache: boolean = true) {
     this.isManualDisconnect = true;
+    if (clearCache) {
+      this.isReconnectingSession = false;
+    }
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
@@ -110,13 +214,27 @@ class RealtimeSocketClient {
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.setConnectionState('connected');
-        // Send JOIN_ROOM message
-        this.send({
-          type: 'JOIN_ROOM',
-          roomId: this.roomId,
-          player: this.player,
-          password: this.password,
-        });
+        // If reconnecting an existing session or socket dropped and reconnecting
+        if (this.isReconnectingSession || (this.sessionToken && this.reconnectAttempts > 0)) {
+          this.send({
+            type: 'RECONNECT_SESSION',
+            roomId: this.roomId,
+            playerId: this.playerId,
+            sessionToken: this.sessionToken,
+          });
+          this.isReconnectingSession = false;
+        } else {
+          // Standard JOIN_ROOM message
+          this.send({
+            type: 'JOIN_ROOM',
+            roomId: this.roomId,
+            player: {
+              ...this.player,
+              sessionToken: this.sessionToken,
+            },
+            password: this.password,
+          });
+        }
 
         // Start ping heartbeat every 20s
         if (this.pingInterval) clearInterval(this.pingInterval);
@@ -131,6 +249,15 @@ class RealtimeSocketClient {
         try {
           const data = JSON.parse(event.data);
           if (data && data.type !== 'PONG') {
+            if (data.type === 'SESSION_RECONNECTED' && data.room) {
+              const myPlayer = data.room.players?.find((p: any) => p.id === this.playerId);
+              if (myPlayer) {
+                this.saveSession(this.roomId, myPlayer, this.sessionToken);
+              }
+            } else if (data.type === 'SESSION_RECONNECT_FAILED') {
+              console.warn('Session reconnection failed:', data.reason);
+              this.clearSession();
+            }
             this.emit(data);
           }
         } catch (e) {
@@ -334,7 +461,8 @@ class RealtimeSocketClient {
       });
     } catch (e) {}
 
-    // Immediately wipe internal room association
+    // Immediately wipe internal room association and cached session
+    this.clearSession();
     this.roomId = '';
     this.playerId = '';
     this.player = null;
@@ -349,6 +477,23 @@ class RealtimeSocketClient {
       } catch (err) {
         console.error('Error leaving room on server:', err);
       }
+    }
+  }
+
+  public async reconnectSessionRest(roomId: string, playerId: string, sessionToken: string) {
+    try {
+      const res = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/reconnect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId, sessionToken }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+      return null;
+    } catch (err) {
+      console.error('Error reconnecting session via REST:', err);
+      return null;
     }
   }
 }

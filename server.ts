@@ -26,6 +26,9 @@ interface ServerPlayer {
   votedForId: string | null;
   isReady: boolean;
   isReadyToLeaveShop?: boolean;
+  isDisconnected?: boolean;
+  disconnectedAt?: number;
+  sessionToken?: string;
 }
 
 interface ServerGameSettings {
@@ -87,7 +90,22 @@ function cleanupRoomAfterPlayerRemoval(room: ServerRoom, removedPlayerId: string
   }
 }
 
+// In-memory room store
+const rooms = new Map<string, ServerRoom>();
+const roomSubscriptions = new Map<string, Set<WebSocket>>();
+// Reconnection grace timers (60s): key = `${roomId}:${playerId}`
+const disconnectTimers = new Map<string, NodeJS.Timeout>();
+
+function clearDisconnectTimer(roomId: string, playerId: string) {
+  const timerKey = `${roomId}:${playerId}`;
+  if (disconnectTimers.has(timerKey)) {
+    clearTimeout(disconnectTimers.get(timerKey)!);
+    disconnectTimers.delete(timerKey);
+  }
+}
+
 function removePlayerFromRoom(roomId: string, playerId: string): ServerRoom | null {
+  clearDisconnectTimer(roomId, playerId);
   const room = rooms.get(roomId);
   if (!room || !playerId) return room || null;
 
@@ -131,10 +149,6 @@ interface ServerRoom {
   createdAt: number;
   lastActive: number;
 }
-
-// In-memory room store
-const rooms = new Map<string, ServerRoom>();
-const roomSubscriptions = new Map<string, Set<WebSocket>>();
 
 // WebSocket client registry: ws -> { roomId, playerId }
 interface ClientMeta {
@@ -290,11 +304,15 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
   if (player) {
     const existingIndex = room.players.findIndex((p) => p.id === player.id);
     if (existingIndex >= 0) {
-      // Update existing player details
+      clearDisconnectTimer(roomId, player.id);
+      // Update existing player details and clear disconnected status
       room.players[existingIndex] = {
         ...room.players[existingIndex],
         name: player.name || room.players[existingIndex].name,
         avatar: player.avatar || room.players[existingIndex].avatar,
+        isDisconnected: false,
+        disconnectedAt: undefined,
+        sessionToken: player.sessionToken || room.players[existingIndex].sessionToken,
       };
     } else {
       // New joining player
@@ -313,6 +331,8 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
         votedForId: null,
         isReady: false,
         isReadyToLeaveShop: false,
+        isDisconnected: false,
+        sessionToken: player.sessionToken,
       });
     }
   }
@@ -325,6 +345,34 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
   });
 
   res.json({ success: true, room });
+});
+
+// Reconnect session via REST
+app.post('/api/rooms/:roomId/reconnect', (req, res) => {
+  const { roomId } = req.params;
+  const { playerId, sessionToken } = req.body;
+  const room = rooms.get(roomId);
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+
+  const player = room.players.find((p) => p.id === playerId);
+  if (!player) {
+    return res.status(404).json({ error: 'Player not found in room' });
+  }
+
+  clearDisconnectTimer(roomId, playerId);
+  player.isDisconnected = false;
+  delete player.disconnectedAt;
+  if (sessionToken && !player.sessionToken) {
+    player.sessionToken = sessionToken;
+  }
+  room.lastActive = Date.now();
+
+  broadcastToRoom(roomId, { type: 'PLAYER_RECONNECTED', playerId, room });
+  broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+
+  res.json({ success: true, room, player });
 });
 
 // Fetch current room state
@@ -524,7 +572,14 @@ async function startServer() {
             rooms.set(roomId, room);
           } else if (player) {
             const existing = room.players.find((p) => p.id === player.id);
-            if (!existing) {
+            if (existing) {
+              clearDisconnectTimer(roomId, player.id);
+              existing.isDisconnected = false;
+              delete existing.disconnectedAt;
+              if (player.name) existing.name = player.name;
+              if (player.avatar) existing.avatar = player.avatar;
+              if (player.sessionToken) existing.sessionToken = player.sessionToken;
+            } else {
               room.players.push({
                 ...player,
                 isHost: room.players.length === 0,
@@ -534,6 +589,7 @@ async function startServer() {
                 hasSubmittedClue: false,
                 votedForId: null,
                 isReady: false,
+                isDisconnected: false,
               });
             }
           }
@@ -542,6 +598,38 @@ async function startServer() {
           // Send current state back to joining client
           ws.send(JSON.stringify({ type: 'ROOM_STATE_SYNC', room }));
           // Broadcast to all other peers in room
+          broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room }, ws);
+        } else if (data.type === 'RECONNECT_SESSION') {
+          const { roomId, playerId, sessionToken } = data;
+          meta.roomId = roomId;
+          meta.playerId = playerId;
+
+          const room = rooms.get(roomId);
+          if (!room) {
+            ws.send(JSON.stringify({ type: 'SESSION_RECONNECT_FAILED', reason: 'Room not found' }));
+            return;
+          }
+
+          const player = room.players.find((p) => p.id === playerId);
+          if (!player) {
+            ws.send(JSON.stringify({ type: 'SESSION_RECONNECT_FAILED', reason: 'Player not found in room' }));
+            return;
+          }
+
+          clearDisconnectTimer(roomId, playerId);
+          player.isDisconnected = false;
+          delete player.disconnectedAt;
+          if (sessionToken && !player.sessionToken) {
+            player.sessionToken = sessionToken;
+          }
+          room.lastActive = Date.now();
+
+          // Confirm reconnect to player and sync state
+          ws.send(JSON.stringify({ type: 'SESSION_RECONNECTED', playerId, room }));
+          ws.send(JSON.stringify({ type: 'ROOM_STATE_SYNC', room }));
+
+          // Notify all other clients in room
+          broadcastToRoom(roomId, { type: 'PLAYER_RECONNECTED', playerId, room }, ws);
           broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room }, ws);
         } else if (data.type === 'STATE_SYNC') {
           const { roomId, updates } = data;
@@ -589,6 +677,7 @@ async function startServer() {
           meta.roomId = undefined;
           meta.playerId = undefined;
           if (roomId && playerId) {
+            clearDisconnectTimer(roomId, playerId);
             const room = rooms.get(roomId);
             if (room) {
               removePlayerFromRoom(roomId, playerId);
@@ -597,6 +686,7 @@ async function startServer() {
         } else if (data.type === 'KICK_PLAYER') {
           const { roomId, playerId } = data;
           if (roomId && playerId) {
+            clearDisconnectTimer(roomId, playerId);
             const room = rooms.get(roomId);
             if (room) {
               room.players = room.players.filter((p) => p.id !== playerId);
@@ -620,14 +710,50 @@ async function startServer() {
       clients.delete(ws);
       if (!closedMeta?.roomId || !closedMeta.playerId) return;
 
-      // A reconnecting tab may already have a newer socket. Do not remove the
-      // player when an older connection closes.
+      const { roomId, playerId } = closedMeta;
+
+      // A reconnecting tab may already have a newer socket. Do not disconnect
+      // if there is an active replacement connection for this player.
       const hasReplacement = [...clients.values()].some(
-        (other) => other.roomId === closedMeta.roomId && other.playerId === closedMeta.playerId
+        (other) => other.roomId === roomId && other.playerId === playerId
       );
-      if (!hasReplacement) {
-        removePlayerFromRoom(closedMeta.roomId, closedMeta.playerId);
-      }
+      if (hasReplacement) return;
+
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const player = room.players.find((p) => p.id === playerId);
+      if (!player) return;
+
+      // Mark player as disconnected with timestamp
+      player.isDisconnected = true;
+      player.disconnectedAt = Date.now();
+      room.lastActive = Date.now();
+
+      // Broadcast disconnect status immediately to peers
+      broadcastToRoom(roomId, {
+        type: 'PLAYER_DISCONNECTED',
+        playerId,
+        disconnectedAt: player.disconnectedAt,
+        room,
+      });
+      broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+
+      // Start 60-second grace timer. If they reconnect within 60s, timer is cancelled.
+      clearDisconnectTimer(roomId, playerId);
+      const timerKey = `${roomId}:${playerId}`;
+      const timer = setTimeout(() => {
+        disconnectTimers.delete(timerKey);
+        const currentRoom = rooms.get(roomId);
+        if (!currentRoom) return;
+        const targetPlayer = currentRoom.players.find((p) => p.id === playerId);
+        if (targetPlayer && targetPlayer.isDisconnected) {
+          console.log(`Grace period (60s) expired for player ${playerId} in room ${roomId}. Removing permanently.`);
+          removePlayerFromRoom(roomId, playerId);
+        }
+      }, 60000);
+
+      disconnectTimers.set(timerKey, timer);
     });
   });
 
