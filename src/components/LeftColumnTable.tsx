@@ -503,9 +503,7 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                 (gamePhase === 'clue_submission' && (isImpostorPeekTarget || isClueLensTarget));
 
               const displayedClue =
-                isCurrent && gamePhase === 'clue_submission' && p.originalClue
-                  ? p.originalClue
-                  : isForgedByActiveImpostor && pendingClueForged?.targetPlayerId === p.id && pendingClueForged.newClue
+                isForgedByActiveImpostor && pendingClueForged?.targetPlayerId === p.id && pendingClueForged.newClue
                   ? pendingClueForged.newClue
                   : p.clue;
 

@@ -337,6 +337,16 @@ class RealtimeSocketClient {
     });
   }
 
+  public usePotion(roomId: string, playerId: string, potionId: string, extra?: Record<string, any>) {
+    this.send({
+      type: 'USE_POTION',
+      roomId,
+      playerId,
+      potionId,
+      ...(extra || {}),
+    });
+  }
+
   // Polling fallback every 3 seconds to guarantee freshness
   private startPollingFallback() {
     if (this.pollInterval) clearInterval(this.pollInterval);

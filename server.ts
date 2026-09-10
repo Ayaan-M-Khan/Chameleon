@@ -20,8 +20,17 @@ interface ServerPlayer {
   inventory?: any;
   infiltratorBoostGold?: number;
   chameleonBoostGold?: number;
+  hasShield?: boolean;
+  shieldActive?: boolean;
+  hasUsedPotionThisTurn?: boolean;
+  scrambled?: boolean;
+  oracleRevealedRow?: number;
+  oracleRevealedCol?: string;
+  inkApplied?: boolean;
   role: 'innocent' | 'fox';
   clue: string;
+  originalClue?: string;
+  forgedBy?: string;
   hasSubmittedClue: boolean;
   votedForId: string | null;
   isReady: boolean;
@@ -51,8 +60,10 @@ interface ServerGameSettings {
 }
 
 function cleanupRoomAfterPlayerRemoval(room: ServerRoom, removedPlayerId: string) {
+  if (!room || !Array.isArray(room.players)) return;
+
   // Clean up any votes targeting the removed player
-  room.players = room.players.map((p) =>
+  room.players = (room.players || []).map((p) =>
     p.votedForId === removedPlayerId ? { ...p, votedForId: null } : p
   );
 
@@ -302,23 +313,27 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
 
   // Add player if not already present
   if (player) {
+    if (!Array.isArray(room.players)) room.players = [];
     const existingIndex = room.players.findIndex((p) => p.id === player.id);
     if (existingIndex >= 0) {
       clearDisconnectTimer(roomId, player.id);
+      const existing = room.players[existingIndex];
+      const validName = player.name && player.name.trim().length > 0 ? player.name.trim() : (existing.name && existing.name.trim().length > 0 ? existing.name.trim() : `Player ${existingIndex + 1}`);
       // Update existing player details and clear disconnected status
       room.players[existingIndex] = {
-        ...room.players[existingIndex],
-        name: player.name || room.players[existingIndex].name,
-        avatar: player.avatar || room.players[existingIndex].avatar,
+        ...existing,
+        name: validName,
+        avatar: player.avatar || existing.avatar,
         isDisconnected: false,
         disconnectedAt: undefined,
-        sessionToken: player.sessionToken || room.players[existingIndex].sessionToken,
+        sessionToken: player.sessionToken || existing.sessionToken,
       };
     } else {
       // New joining player
+      const validName = player.name && player.name.trim().length > 0 ? player.name.trim() : `Player ${room.players.length + 1}`;
       room.players.push({
         id: player.id,
-        name: player.name || `Player ${room.players.length + 1}`,
+        name: validName,
         avatar: player.avatar || '🦊',
         isHuman: true,
         isHost: false,
@@ -356,7 +371,7 @@ app.post('/api/rooms/:roomId/reconnect', (req, res) => {
     return res.status(404).json({ error: 'Room not found' });
   }
 
-  const player = room.players.find((p) => p.id === playerId);
+  const player = (room.players || []).find((p) => p.id === playerId);
   if (!player) {
     return res.status(404).json({ error: 'Player not found in room' });
   }
@@ -396,6 +411,34 @@ app.post('/api/rooms/:roomId/sync', (req, res) => {
 
   const { updates } = req.body;
   if (updates) {
+    if (Array.isArray(updates.players)) {
+      updates.players = updates.players.map((p: any, idx: number) => {
+        const existing = (room.players || []).find((oldP) => oldP.id === p.id);
+        const validName = p.name && p.name.trim().length > 0 ? p.name.trim() : (existing?.name && existing.name.trim().length > 0 ? existing.name.trim() : `Player ${idx + 1}`);
+        return {
+          ...(existing || {}),
+          ...p,
+          name: validName,
+        };
+      });
+    }
+
+    // Reset single-round buffs and potion locks on new round
+    if (updates.gamePhase === 'clue_submission' && room.gamePhase !== 'clue_submission') {
+      if (Array.isArray(updates.players)) {
+        updates.players = updates.players.map((p: any) => ({
+          ...p,
+          hasShield: false,
+          shieldActive: false,
+          hasUsedPotionThisTurn: false,
+          scrambled: false,
+          oracleRevealedRow: undefined,
+          oracleRevealedCol: undefined,
+          inkApplied: false,
+        }));
+      }
+    }
+
     Object.assign(room, updates);
     room.lastActive = Date.now();
     broadcastToRoom(roomId, {
@@ -566,6 +609,7 @@ async function startServer() {
           let room = rooms.get(roomId);
           if (!room) {
             // Create room on the fly
+            const initialName = player?.name && player.name.trim().length > 0 ? player.name.trim() : 'Player 1';
             room = {
               id: roomId,
               password: password || '',
@@ -575,7 +619,7 @@ async function startServer() {
               roundNumber: 1,
               voteRound: 1,
               suddenDeath: false,
-              players: player ? [{ ...player, isHost: true }] : [],
+              players: player ? [{ ...player, name: initialName, isHost: true }] : [],
               selectedCategoryId: 'sports',
               settings: {
                 pointForGuessingFox: true,
@@ -599,17 +643,20 @@ async function startServer() {
             };
             rooms.set(roomId, room);
           } else if (player) {
+            if (!Array.isArray(room.players)) room.players = [];
             const existing = room.players.find((p) => p.id === player.id);
             if (existing) {
               clearDisconnectTimer(roomId, player.id);
               existing.isDisconnected = false;
               delete existing.disconnectedAt;
-              if (player.name) existing.name = player.name;
+              if (player.name && player.name.trim().length > 0) existing.name = player.name.trim();
               if (player.avatar) existing.avatar = player.avatar;
               if (player.sessionToken) existing.sessionToken = player.sessionToken;
             } else {
+              const validName = player.name && player.name.trim().length > 0 ? player.name.trim() : `Player ${room.players.length + 1}`;
               room.players.push({
                 ...player,
+                name: validName,
                 isHost: room.players.length === 0,
                 isHuman: true,
                 score: 0,
@@ -643,7 +690,7 @@ async function startServer() {
             return;
           }
 
-          const player = room.players.find((p) => p.id === playerId);
+          const player = (room.players || []).find((p) => p.id === playerId);
           if (!player) {
             ws.send(JSON.stringify({ type: 'SESSION_RECONNECT_FAILED', reason: 'Player not found in room' }));
             return;
@@ -669,7 +716,75 @@ async function startServer() {
           if (roomId && updates) {
             const room = rooms.get(roomId);
             if (room) {
+              if (Array.isArray(updates.players)) {
+                updates.players = updates.players.map((p: any, idx: number) => {
+                  const existing = (room.players || []).find((oldP) => oldP.id === p.id);
+                  const validName = p.name && p.name.trim().length > 0 ? p.name.trim() : (existing?.name && existing.name.trim().length > 0 ? existing.name.trim() : `Player ${idx + 1}`);
+                  return {
+                    ...(existing || {}),
+                    ...p,
+                    name: validName,
+                  };
+                });
+              }
+
+              // Reset single-round buffs and potion locks on new round
+              if (updates.gamePhase === 'clue_submission' && room.gamePhase !== 'clue_submission') {
+                if (Array.isArray(updates.players)) {
+                  updates.players = updates.players.map((p: any) => ({
+                    ...p,
+                    hasShield: false,
+                    shieldActive: false,
+                    hasUsedPotionThisTurn: false,
+                    scrambled: false,
+                    oracleRevealedRow: undefined,
+                    oracleRevealedCol: undefined,
+                    inkApplied: false,
+                    originalClue: undefined,
+                    forgedBy: undefined,
+                  }));
+                }
+              }
+
               Object.assign(room, updates);
+              room.lastActive = Date.now();
+              broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+            }
+          }
+        } else if (data.type === 'USE_POTION') {
+          const { roomId, playerId, potionId, targetPlayerId, newClue, category, secretCoordinate } = data;
+          if (roomId) {
+            const room = rooms.get(roomId);
+            if (room && Array.isArray(room.players)) {
+              const sender = room.players.find((p) => p.id === playerId);
+              if (sender) {
+                sender.hasUsedPotionThisTurn = true;
+                if (sender.inventory && sender.inventory[potionId]) {
+                  sender.inventory[potionId] = Math.max(0, sender.inventory[potionId] - 1);
+                }
+              }
+
+              if (potionId === 'ink_of_deceit' && targetPlayerId && newClue) {
+                const target = room.players.find((p) => p.id === targetPlayerId);
+                if (target) {
+                  target.originalClue = target.originalClue || target.clue || '';
+                  target.clue = String(newClue).trim().slice(0, 30);
+                  target.hasSubmittedClue = true;
+                  target.forgedBy = playerId;
+                }
+              } else if (potionId === 'grid_scrambler') {
+                if (category) {
+                  room.category = category;
+                }
+                if (secretCoordinate) {
+                  room.secretCoordinate = secretCoordinate;
+                }
+              } else if (potionId === 'vote_shield') {
+                if (sender) {
+                  sender.hasShield = true;
+                }
+              }
+
               room.lastActive = Date.now();
               broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
             }
@@ -722,6 +837,7 @@ async function startServer() {
             clearDisconnectTimer(roomId, playerId);
             const room = rooms.get(roomId);
             if (room) {
+              if (!Array.isArray(room.players)) room.players = [];
               room.players = room.players.filter((p) => p.id !== playerId);
               room.lastActive = Date.now();
               if (room.players.length === 0) {
@@ -758,7 +874,7 @@ async function startServer() {
       const room = rooms.get(roomId);
       if (!room) return;
 
-      const player = room.players.find((p) => p.id === playerId);
+      const player = (room.players || []).find((p) => p.id === playerId);
       if (!player) return;
 
       // Mark player as disconnected with timestamp

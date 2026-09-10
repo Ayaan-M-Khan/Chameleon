@@ -34,6 +34,13 @@ export interface Player {
   infiltratorBoostGold?: number;
   chameleonBoostGold?: number;
   isMuted?: boolean;
+  hasShield?: boolean;
+  shieldActive?: boolean;
+  hasUsedPotionThisTurn?: boolean;
+  scrambled?: boolean;
+  oracleRevealedRow?: number;
+  oracleRevealedCol?: string;
+  inkApplied?: boolean;
   role: PlayerRole;
   clue: string;
   originalClue?: string;

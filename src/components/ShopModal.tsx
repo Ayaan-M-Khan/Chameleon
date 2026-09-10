@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import confetti from 'canvas-confetti';
 import {
   Sparkles,
   Coins,
@@ -65,7 +66,15 @@ export const ShopModal: React.FC<ShopModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       sound.shopOpen();
+      try {
+        confetti.reset();
+      } catch {}
     }
+    return () => {
+      try {
+        confetti.reset();
+      } catch {}
+    };
   }, [isOpen]);
 
   // 2. Automated simulated shopping & readiness for AI bots
@@ -329,12 +338,18 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                       const isPurchasable = canAfford;
                       const ownedCount = currentShopper.inventory?.[item.id] || 0;
                       const isRecent = justPurchasedId === item.id;
+                      const isRoleCompatible =
+                        item.roleTarget === 'all' ||
+                        (item.roleTarget === 'fox' && isInfiltrator) ||
+                        (item.roleTarget === 'innocent' && !isInfiltrator);
 
                       return (
                         <div
                           key={item.id}
                           className={`retro-card p-3.5 rounded-xl border-2 transition-all flex flex-col justify-between space-y-2.5 ${
-                            'bg-slate-900/90 border-slate-700 hover:border-amber-400/80 shadow-md'
+                            isRoleCompatible
+                              ? 'bg-slate-900/90 border-slate-700 hover:border-amber-400/80 shadow-md'
+                              : 'bg-slate-950/90 border-slate-800 hover:border-slate-700 opacity-90'
                           } ${isRecent ? 'ring-2 ring-emerald-400 bg-emerald-950/40' : ''}`}
                         >
                           {/* Item Card Header */}
@@ -346,7 +361,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                                   <h3 className="font-display font-bold text-sm text-white">
                                     {item.name}
                                   </h3>
-                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                     <span
                                       className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
                                         item.roleTarget === 'fox'
@@ -354,8 +369,17 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                                           : 'text-emerald-300 bg-emerald-950/80 border-emerald-700/60'
                                       }`}
                                     >
-                                      {item.roleTarget === 'fox' ? 'Infiltrator Only' : 'Innocent Only'}
+                                      {item.roleTarget === 'fox' ? 'Infiltrator' : 'Innocent'}
                                     </span>
+                                    {!isRoleCompatible ? (
+                                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border bg-amber-950/80 text-amber-300 border-amber-600/60">
+                                        Unavailable for {isInfiltrator ? 'Infiltrator' : 'Innocent'} in Rounds
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border bg-emerald-950/80 text-emerald-300 border-emerald-600/60">
+                                        Usable by You
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </div>

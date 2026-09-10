@@ -151,12 +151,20 @@ function sanitizePlayerName(value: string, trim = true): string {
   return trim ? sanitized.trim() : sanitized;
 }
 
-function sanitizePlayers(players: Player[]): Player[] {
-  return players.map((player) => ({
-    ...player,
-    name: player.name !== undefined ? sanitizePlayerName(player.name, false) : 'Player',
-    clue: sanitizeClue(player.clue || ''),
-  }));
+function sanitizePlayers(newPlayers: Player[], existingPlayers?: Player[]): Player[] {
+  return newPlayers.map((player, idx) => {
+    const existing = existingPlayers?.find((p) => p.id === player.id);
+    let cleanName = player.name !== undefined ? sanitizePlayerName(player.name, false) : '';
+    if (!cleanName.trim()) {
+      cleanName = existing?.name ? sanitizePlayerName(existing.name, false) : `Player ${idx + 1}`;
+    }
+    return {
+      ...(existing || {}),
+      ...player,
+      name: cleanName,
+      clue: sanitizeClue(player.clue || ''),
+    };
+  });
 }
 
 export default function App() {
@@ -254,6 +262,11 @@ export default function App() {
   const secretCoordinateRef = useRef<Coordinate | null>(secretCoordinate);
   const roomIdRef = useRef<string>(roomId);
   const gamePhaseRef = useRef<GamePhase>(gamePhase);
+  const playersRef = useRef<Player[]>(players);
+
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
 
   useEffect(() => {
     roomIdRef.current = roomId;
@@ -414,7 +427,20 @@ export default function App() {
           return;
         }
 
-        if (event.room.players) setPlayers(sanitizePlayers(event.room.players));
+        const isNewRoundStarting =
+          event.room.gamePhase === 'clue_submission' && gamePhaseRef.current !== 'clue_submission';
+
+        if (event.room.players) {
+          const sanitized = sanitizePlayers(event.room.players, playersRef.current);
+          setPlayers(sanitized);
+          if (isNewRoundStarting) {
+            setActiveVoteShields([]);
+            setHasUsedPotionThisTurn(false);
+          } else {
+            const shielded = sanitized.filter((p: any) => p.hasShield).map((p) => p.id);
+            setActiveVoteShields(shielded);
+          }
+        }
         if (event.room.settings) setSettings((prev) => ({ ...prev, ...event.room.settings }));
         if (event.room.gamePhase) {
           setGamePhase(event.room.gamePhase);
@@ -459,7 +485,7 @@ export default function App() {
         const amInRoom = event.room.players?.some((p) => p.id === myPlayerId);
         if (!amInRoom) return;
         if (event.room.players) {
-          const sanitized = sanitizePlayers(event.room.players);
+          const sanitized = sanitizePlayers(event.room.players, playersRef.current);
           setPlayers(sanitized);
         }
       } else if (event.type === 'PLAYER_KICKED') {
@@ -469,7 +495,7 @@ export default function App() {
           return;
         }
         if (event.room && event.room.id === roomIdRef.current && event.room.players) {
-          setPlayers(sanitizePlayers(event.room.players));
+          setPlayers(sanitizePlayers(event.room.players, playersRef.current));
         }
       }
     });
@@ -743,6 +769,7 @@ export default function App() {
         name: p.name?.trim() || `Player ${idx + 1}`,
         role: chosenFoxIndices.has(idx) ? 'fox' : 'innocent',
         clue: '',
+        originalClue: '',
         hasSubmittedClue: false,
         votedForId: null,
         isReady: false,
@@ -752,6 +779,11 @@ export default function App() {
         inventory: keepScores ? (p.inventory || {}) : {},
         infiltratorBoostGold: 0,
         chameleonBoostGold: 0,
+        hasUsedPotionThisTurn: false,
+        hasShield: false,
+        shieldActive: false,
+        silenced: false,
+        forgedBy: undefined,
       };
     });
 
@@ -805,6 +837,8 @@ export default function App() {
         roundResolution: null,
         voteRound: 1,
         suddenDeath: false,
+        pendingClueForged: null,
+        forgedTargetPlayerId: null,
       });
     }
 
@@ -1950,23 +1984,24 @@ export default function App() {
     }
 
     // Deduct potion from player inventory
-    setPlayers((prev) =>
-      prev.map((p) => {
-        if (p.id === activePlayer.id) {
-          const nextInv = { ...(p.inventory || {}) };
-          if (nextInv[potionId] > 1) {
-            nextInv[potionId] -= 1;
-          } else {
-            delete nextInv[potionId];
-          }
-          return {
-            ...p,
-            inventory: nextInv,
-          };
+    const updatedPlayers = players.map((p) => {
+      if (p.id === activePlayer.id) {
+        const nextInv = { ...(p.inventory || {}) };
+        if (nextInv[potionId] > 1) {
+          nextInv[potionId] -= 1;
+        } else {
+          delete nextInv[potionId];
         }
-        return p;
-      })
-    );
+        return {
+          ...p,
+          inventory: nextInv,
+          hasUsedPotionThisTurn: true,
+          ...(potionId === 'vote_shield' ? { hasShield: true, shieldActive: true } : {}),
+        };
+      }
+      return p;
+    });
+    setPlayers(updatedPlayers);
 
     // Enforce 1 use per turn
     setHasUsedPotionThisTurn(true);
@@ -1982,6 +2017,10 @@ export default function App() {
     if (potionId === 'oracle_serum') {
       sound.potionDrink();
       setIsOracleModalOpen(true);
+      if (gameMode === 'room' && roomId) {
+        socketClient.usePotion(roomId, activePlayer.id, 'oracle_serum');
+        socketClient.syncState(roomId, { players: updatedPlayers });
+      }
     } else if (potionId === 'grid_scrambler') {
       sound.powerup();
       setIsScrambling(true);
@@ -2031,6 +2070,19 @@ export default function App() {
         };
         setSecretCoordinate(newCoord);
         secretCoordinateRef.current = newCoord;
+
+        if (gameMode === 'room' && roomId) {
+          socketClient.usePotion(roomId, activePlayer.id, 'grid_scrambler', {
+            category: newCat,
+            secretCoordinate: newCoord,
+          });
+          socketClient.syncState(roomId, {
+            category: newCat,
+            secretCoordinate: newCoord,
+            players: updatedPlayers,
+          });
+          broadcastState(gamePhase, updatedPlayers);
+        }
       }
     } else if (potionId === 'clue_lens') {
       sound.potionDrink();
@@ -2041,6 +2093,14 @@ export default function App() {
       if (otherPlayers.length > 0) {
         const target = otherPlayers.find((p) => p.hasSubmittedClue && p.clue) || otherPlayers[0];
         setClueLensPeekPlayerId(target.id);
+      }
+
+      if (gameMode === 'room' && roomId) {
+        socketClient.usePotion(roomId, activePlayer.id, 'clue_lens');
+        socketClient.syncState(roomId, {
+          players: updatedPlayers,
+        });
+        broadcastState(gamePhase, updatedPlayers);
       }
 
       // Innocent effect: Public announcement for everyone including the Chameleon
@@ -2054,6 +2114,14 @@ export default function App() {
     } else if (potionId === 'vote_shield') {
       sound.potionDrink();
       setActiveVoteShields((prev) => (prev.includes(activePlayer.id) ? prev : [...prev, activePlayer.id]));
+
+      if (gameMode === 'room' && roomId) {
+        socketClient.usePotion(roomId, activePlayer.id, 'vote_shield');
+        socketClient.syncState(roomId, {
+          players: updatedPlayers,
+        });
+        broadcastState(gamePhase, updatedPlayers);
+      }
 
       // Innocent effect: Public announcement for everyone including the Chameleon
       setActivePotionToast({
@@ -2107,6 +2175,10 @@ export default function App() {
     setIsClueForgeryModalOpen(false);
 
     if (gameMode === 'room' && roomId) {
+      socketClient.usePotion(roomId, activePlayer.id, 'ink_of_deceit', {
+        targetPlayerId,
+        newClue: sanitizedForgedClue,
+      });
       socketClient.syncState(roomId, {
         players: updated,
         forgedTargetPlayerId: targetPlayerId,
