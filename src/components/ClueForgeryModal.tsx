@@ -27,17 +27,12 @@ export const ClueForgeryModal: React.FC<ClueForgeryModalProps> = ({
     if (isOpen) {
       const defaultTarget = candidatePlayers[0]?.id || '';
       setSelectedTargetId(defaultTarget);
-      const targetPlayer = candidatePlayers.find((p) => p.id === defaultTarget);
-      setForgedClue(targetPlayer?.clue || '');
+      setForgedClue('');
     }
   }, [isOpen]);
 
   const handleSelectTarget = (targetId: string) => {
     setSelectedTargetId(targetId);
-    const targetPlayer = candidatePlayers.find((p) => p.id === targetId);
-    if (targetPlayer?.clue) {
-      setForgedClue(targetPlayer.clue);
-    }
   };
 
   if (!isOpen) return null;
@@ -125,7 +120,7 @@ export const ClueForgeryModal: React.FC<ClueForgeryModalProps> = ({
                           {isSelected && <Check className="w-3.5 h-3.5 text-purple-400 stroke-[3]" />}
                         </div>
                         <div className="text-[10px] text-slate-400 truncate font-mono mt-0.5">
-                          {p.clue ? `Current: "${p.clue}"` : 'Clue pending...'}
+                          {p.hasSubmittedClue ? '✓ Clue submitted' : '⏳ Awaiting clue...'}
                         </div>
                       </div>
                     </button>
@@ -151,7 +146,7 @@ export const ClueForgeryModal: React.FC<ClueForgeryModalProps> = ({
                   maxLength={80}
                   value={forgedClue}
                   onChange={(e) => setForgedClue(e.target.value)}
-                  placeholder="e.g. Striker, Goal, Leather, Pitch..."
+                  placeholder="Enter forged clue (e.g. suspicious or off-topic hint)..."
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border-2 border-purple-500/60 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/40 text-white font-mono text-sm shadow-inner placeholder:text-slate-600 outline-none"
                 />
               </div>
@@ -168,7 +163,7 @@ export const ClueForgeryModal: React.FC<ClueForgeryModalProps> = ({
               <div className="space-y-1">
                 <strong className="text-purple-300 font-bold block">Sneaky Execution:</strong>
                 <p className="text-[11px] leading-relaxed text-slate-300">
-                  This change is completely covert. The victim's clue will silently transform into your forgery the instant voting commences!
+                  This change replaces their clue for the round. As the Infiltrator, you will clearly see the forged clue on the board and during voting!
                 </p>
               </div>
             </div>

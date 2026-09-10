@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, CheckCircle2, AlertOctagon, RotateCcw, Trophy, Sparkles, Clock, ArrowRight, Eye, Edit3, X, MessageSquare, VolumeX, Lock, ChevronDown, ChevronUp, Target } from 'lucide-react';
+import { Send, CheckCircle2, AlertOctagon, RotateCcw, Trophy, Sparkles, Clock, ArrowRight, Eye, EyeOff, Edit3, X, MessageSquare, VolumeX, Lock, ChevronDown, ChevronUp, Target } from 'lucide-react';
 import { Player, GamePhase, RoundResolution, GameSettings, DiscussionMessage } from '../types';
 import { sound } from '../utils/sound';
 
@@ -40,6 +40,7 @@ interface ActionTrayProps {
   roundNumber?: number;
   isHost?: boolean;
   gameMode?: string;
+  forgedTargetPlayerId?: string | null;
 }
 
 export const ActionTray: React.FC<ActionTrayProps> = ({
@@ -73,17 +74,20 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
   roundNumber,
   isHost = true,
   gameMode = 'solo',
+  forgedTargetPlayerId,
 }) => {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [discussionInput, setDiscussionInput] = React.useState('');
-  const [isDiscussionOpen, setIsDiscussionOpen] = React.useState(true);
+  const [isDiscussionOpen, setIsDiscussionOpen] = React.useState(false);
+  const [isVotingTrayMinimized, setIsVotingTrayMinimized] = React.useState(false);
   const [isSubmittingClue, setIsSubmittingClue] = React.useState(false);
 
   const isCurrentPlayerSilenced = silencedPlayerIds.includes(activePlayer.id);
 
-  // Reset submission state on gamePhase / player submission changes
+  // Reset states on gamePhase / player submission changes
   React.useEffect(() => {
     setIsSubmittingClue(false);
+    setIsVotingTrayMinimized(false);
   }, [gamePhase, activePlayer.hasSubmittedClue]);
 
   const handleSendDiscussion = (presetText?: string) => {
@@ -111,7 +115,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
   };
 
   return (
-    <section className="retro-card rounded-xl p-4 bg-[#131B2E] border-2 border-slate-700 text-slate-100 mt-4 shadow-xl">
+    <section className="retro-card rounded-xl p-3 sm:p-4 bg-[#131B2E] border-2 border-slate-700 text-slate-100 shadow-xl">
       {/* Turn Timer Bar (if enabled in settings) */}
       {(settings.turnTimer || (gamePhase === 'voting' && suddenDeath)) && (gamePhase === 'clue_submission' || gamePhase === 'voting') && (
         <div className="mb-3">
@@ -297,31 +301,96 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
         const waitingVotePlayers = players.filter((p) => !p.votedForId);
         const allVotesSubmitted = votesCastCount === totalPlayers;
         const votedTarget = players.find((p) => p.id === activePlayer.votedForId);
+        const selectedPlayer = players.find((p) => p.id === selectedVoteTargetId);
+
+        if (isVotingTrayMinimized) {
+          return (
+            <div className="flex items-center justify-between gap-2 py-0.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <AlertOctagon className="w-5 h-5 text-rose-400 shrink-0 animate-pulse" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-display font-black text-xs sm:text-sm text-white uppercase tracking-wider">
+                      Voting Phase Active
+                    </span>
+                    <span className="text-[10px] sm:text-[11px] font-mono font-bold bg-slate-900 text-rose-300 border border-rose-500/50 px-2 py-0.5 rounded">
+                      {votesCastCount}/{totalPlayers} Votes
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate">
+                    {hasCurrentPlayerVoted
+                      ? `Your vote is locked for ${votedTarget?.name || 'Selected'}`
+                      : selectedPlayer
+                      ? `Selected suspect: ${selectedPlayer.name}`
+                      : 'Review the 4x4 board and clues above, then open to vote'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {!hasCurrentPlayerVoted && selectedPlayer && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSubmitVote();
+                      sound.voteCast();
+                    }}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-display font-black text-xs uppercase tracking-wider rounded-lg shadow-md cursor-pointer transition-transform active:scale-95 flex items-center gap-1"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Cast Vote: </span>
+                    <span>{selectedPlayer.name}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsVotingTrayMinimized(false)}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-display font-black text-xs uppercase tracking-wider rounded-lg shadow-md flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                  <span>Open Vote Panel</span>
+                </button>
+              </div>
+            </div>
+          );
+        }
 
         return (
           <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-700/60">
               <div>
-                <h3 className="font-display font-black text-base sm:text-lg uppercase tracking-tight text-white flex items-center gap-2">
-                  <AlertOctagon className="w-5 h-5 text-rose-400" />
+                <h3 className="font-display font-black text-sm sm:text-base uppercase tracking-tight text-white flex items-center gap-2">
+                  <AlertOctagon className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400" />
                   Who's The Infiltrator? Vote.
                 </h3>
-                <p className="text-xs text-slate-400">
-                  Review everyone's clue in the left table. Cast your vote for the player you suspect is blending in!
+                <p className="text-[11px] sm:text-xs text-slate-400">
+                  Review everyone's clue against the 4x4 matrix. Cast your vote for the player blending in!
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 self-start sm:self-auto">
-                <span className="text-xs font-mono font-bold bg-slate-900/90 text-rose-300 border border-rose-500/50 px-2.5 py-1 rounded-md">
+              <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                <span className="text-[11px] sm:text-xs font-mono font-bold bg-slate-900/90 text-rose-300 border border-rose-500/50 px-2.5 py-1 rounded-md">
                   Votes: {votesCastCount} / {totalPlayers} In
                 </span>
                 {hasCurrentPlayerVoted && (
-                  <span className="text-xs font-bold text-emerald-300 bg-emerald-950 border border-emerald-600 px-2.5 py-1 rounded-md flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Your vote is cast
+                  <span className="text-[11px] font-bold text-emerald-300 bg-emerald-950 border border-emerald-600 px-2.5 py-1 rounded-md flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Voted
                   </span>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setIsVotingTrayMinimized(true)}
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-md border border-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                  title="Minimize voting drawer so you can inspect the 4x4 board and clues"
+                >
+                  <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                  <span>View Board</span>
+                </button>
               </div>
             </div>
+
+            {/* Scrollable Voting Body: Keeps board visible above */}
+            <div className="max-h-[38vh] sm:max-h-[30vh] overflow-y-auto pr-1 space-y-2.5">
 
             {/* Waiting for everyone banner if current player voted */}
             {hasCurrentPlayerVoted && (
@@ -570,7 +639,18 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                           }`}
                           title={p.clue ? `Clue: "${p.clue}"` : undefined}
                         >
-                          {p.clue ? <span className="break-words truncate max-w-[200px] inline-block align-bottom">"{p.clue}"</span> : <span className="text-slate-500 italic font-sans font-normal text-[10px]">No clue</span>}
+                          {p.clue ? (
+                            <span className="break-words truncate max-w-[200px] inline-flex items-center gap-1 align-bottom">
+                              <span>"{p.clue}"</span>
+                              {activePlayer.role === 'fox' && (p.id === forgedTargetPlayerId || p.forgedBy === activePlayer.id) && (
+                                <span className="text-[9px] font-sans font-extrabold uppercase tracking-wider text-purple-300 bg-purple-950/90 border border-purple-500/60 px-1 py-0.2 rounded shrink-0">
+                                  ✒️ Forged
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 italic font-sans font-normal text-[10px]">No clue</span>
+                          )}
                         </div>
                       </div>
 
@@ -588,6 +668,7 @@ export const ActionTray: React.FC<ActionTrayProps> = ({
                   );
                 })}
             </div>
+          </div>
 
             {/* Confirm or Change Vote Button */}
             {!allVotesSubmitted && (

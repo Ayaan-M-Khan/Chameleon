@@ -55,6 +55,75 @@ interface LobbyViewProps {
   onUpdateChameleonBoost?: (playerId: string, gold: number) => void;
 }
 
+interface EditablePlayerNameProps {
+  playerId: string;
+  currentName: string;
+  onUpdateName: (id: string, name: string) => void;
+  title?: string;
+}
+
+function EditablePlayerName({
+  playerId,
+  currentName,
+  onUpdateName,
+  title = "Click to edit your name",
+}: EditablePlayerNameProps) {
+  const [localName, setLocalName] = React.useState(currentName);
+  const [isFocused, setIsFocused] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isFocused) {
+      setLocalName(currentName);
+    }
+  }, [currentName, isFocused]);
+
+  const commitName = (rawName: string) => {
+    const trimmed = rawName.trim();
+    if (!trimmed) {
+      // When tapping off empty, resort to setting name as 'Player'
+      setLocalName('Player');
+      onUpdateName(playerId, 'Player');
+    } else {
+      setLocalName(trimmed);
+      onUpdateName(playerId, trimmed);
+    }
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    commitName(localName);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    }
+  };
+
+  return (
+    <div className="relative flex items-center">
+      <input
+        type="text"
+        value={localName}
+        onFocus={() => setIsFocused(true)}
+        onChange={(e) => {
+          const val = e.target.value.slice(0, 20);
+          setLocalName(val);
+          if (val.trim().length > 0) {
+            onUpdateName(playerId, val);
+          }
+        }}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        placeholder="Player"
+        className="font-bold text-xs sm:text-sm text-white bg-slate-900/70 border border-slate-600 hover:border-slate-500 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/40 focus:outline-hidden rounded px-1.5 py-0.5 placeholder:text-slate-500 transition-all w-28 sm:w-36"
+        maxLength={20}
+        title={title}
+      />
+    </div>
+  );
+}
+
 export const LobbyView: React.FC<LobbyViewProps> = ({
   players,
   gameMode,
@@ -79,7 +148,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const boostHandler = onUpdateInfiltratorBoost || onUpdateChameleonBoost;
   const [copiedCode, setCopiedCode] = React.useState(false);
   const [copiedInvite, setCopiedInvite] = React.useState(false);
-  const canStart = players.length >= 3;
+  const hasEmptyName = players.some((p) => !p.name || !p.name.trim());
+  const canStart = players.length >= 3 && !hasEmptyName;
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(roomId);
@@ -305,16 +375,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           {canEditName ? (
-                            <div className="relative flex items-center">
-                              <input
-                                type="text"
-                                value={p.name}
-                                onChange={(e) => onUpdatePlayerName(p.id, e.target.value)}
-                                className="font-bold text-xs sm:text-sm text-white bg-slate-900/70 border border-slate-600 hover:border-slate-500 focus:border-emerald-400 focus:outline-hidden rounded px-1.5 py-0.5"
-                                maxLength={20}
-                                title="Click to edit your name"
-                              />
-                            </div>
+                            <EditablePlayerName
+                              playerId={p.id}
+                              currentName={p.name}
+                              onUpdateName={onUpdatePlayerName}
+                            />
                           ) : (
                             <span className="font-bold text-xs sm:text-sm text-white px-1 break-words [overflow-wrap:anywhere] max-w-[140px] leading-tight select-none">
                               {p.name}
@@ -770,7 +835,13 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 className="w-full retro-button py-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:pointer-events-none text-slate-950 rounded-xl font-display font-black text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2 shadow-md cursor-pointer active:scale-95 transition-transform"
               >
                 <Play className="w-5 h-5 fill-slate-950" />
-                <span>{canStart ? 'Deal Cards & Start Round' : `Need at least 3 players (${players.length}/3)`}</span>
+                <span>
+                  {players.length < 3
+                    ? `Need at least 3 players (${players.length}/3)`
+                    : hasEmptyName
+                    ? 'All players must have a name'
+                    : 'Deal Cards & Start Round'}
+                </span>
               </button>
             )}
 
@@ -1134,6 +1205,18 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* CREATOR FOOTER REFERENCE (Appears only at the bottom of the page) */}
+      <footer id="app-creator-footer" className="w-full max-w-4xl mx-auto px-4 py-4 text-center border-t border-slate-800/80 mt-8 mb-2">
+        <p className="text-xs text-slate-400 font-medium tracking-wide flex items-center justify-center gap-1.5 flex-wrap">
+          <span>Created by</span>
+          <span className="font-bold text-amber-300 font-display uppercase tracking-wider bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/80 text-xs">
+            Ayaan Khan
+          </span>
+          <span className="text-slate-500">•</span>
+          <span className="text-slate-400">The Infiltrator Social Deduction Game</span>
+        </p>
+      </footer>
     </div>
   );
 };

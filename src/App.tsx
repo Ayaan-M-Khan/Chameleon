@@ -19,6 +19,7 @@ import { POTION_CATALOG } from './data/potions';
 
 import { HeaderBar } from './components/HeaderBar';
 import { motion, AnimatePresence } from 'motion/react';
+import { Grid3X3, Users } from 'lucide-react';
 import { LeftColumnTable } from './components/LeftColumnTable';
 import { RightColumnGrid } from './components/RightColumnGrid';
 import { ActionTray } from './components/ActionTray';
@@ -153,7 +154,7 @@ function sanitizePlayerName(value: string, trim = true): string {
 function sanitizePlayers(players: Player[]): Player[] {
   return players.map((player) => ({
     ...player,
-    name: sanitizePlayerName(player.name || 'Player') || 'Player',
+    name: player.name !== undefined ? sanitizePlayerName(player.name, false) : 'Player',
     clue: sanitizeClue(player.clue || ''),
   }));
 }
@@ -307,6 +308,8 @@ export default function App() {
 
   // Silence potion states
   const [silencedPlayerIds, setSilencedPlayerIds] = useState<string[]>([]);
+  // Responsive layout tab on mobile/iPhone: 'board' | 'clues' | 'both'
+  const [mobileGameTab, setMobileGameTab] = useState<'board' | 'clues' | 'both'>('board');
   const [isSilenceModalOpen, setIsSilenceModalOpen] = useState(false);
 
   // Infiltrator odds booster state
@@ -433,6 +436,13 @@ export default function App() {
         if (event.room.roundNumber !== undefined) setRoundNumber(event.room.roundNumber);
         if (event.room.voteRound !== undefined) setVoteRound(event.room.voteRound);
         if (event.room.suddenDeath !== undefined) setSuddenDeath(Boolean(event.room.suddenDeath));
+        if (event.room.forgedTargetPlayerId !== undefined) {
+          setForgedTargetPlayerId(event.room.forgedTargetPlayerId);
+        }
+        if (event.room.pendingClueForged !== undefined && !pendingClueForgedRef.current) {
+          setPendingClueForged(event.room.pendingClueForged);
+          pendingClueForgedRef.current = event.room.pendingClueForged;
+        }
       } else if (event.type === 'EMOJI_REACTION' && event.reaction) {
         if (!roomIdRef.current) return;
         const reaction = event.reaction as EmojiReaction;
@@ -448,7 +458,10 @@ export default function App() {
         if (event.room.id !== roomIdRef.current) return;
         const amInRoom = event.room.players?.some((p) => p.id === myPlayerId);
         if (!amInRoom) return;
-        if (event.room.players) setPlayers(sanitizePlayers(event.room.players));
+        if (event.room.players) {
+          const sanitized = sanitizePlayers(event.room.players);
+          setPlayers(sanitized);
+        }
       } else if (event.type === 'PLAYER_KICKED') {
         if (event.kickedPlayerId === myPlayerId) {
           alert('You were removed from the party by the host.');
@@ -463,6 +476,35 @@ export default function App() {
 
     return () => {
       unsubscribe();
+    };
+  }, [myPlayerId]);
+
+  // Tab Close / Window Unload: Remove player immediately from the room
+  useEffect(() => {
+    const handleTabClose = () => {
+      const activeRoom = roomIdRef.current;
+      const pId = myPlayerId;
+      if (activeRoom && pId) {
+        try {
+          const payload = JSON.stringify({ playerId: pId });
+          if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+            navigator.sendBeacon(
+              `/api/rooms/${activeRoom}/leave`,
+              new Blob([payload], { type: 'application/json' })
+            );
+          }
+          socketClient.leaveRoom(activeRoom, pId);
+        } catch {
+          // Ignore page teardown errors
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleTabClose);
+    window.addEventListener('pagehide', handleTabClose);
+    return () => {
+      window.removeEventListener('beforeunload', handleTabClose);
+      window.removeEventListener('pagehide', handleTabClose);
     };
   }, [myPlayerId]);
 
@@ -698,6 +740,7 @@ export default function App() {
       const boostSpent = p.infiltratorBoostGold ?? p.chameleonBoostGold ?? 0;
       return {
         ...p,
+        name: p.name?.trim() || `Player ${idx + 1}`,
         role: chosenFoxIndices.has(idx) ? 'fox' : 'innocent',
         clue: '',
         hasSubmittedClue: false,
@@ -894,11 +937,21 @@ export default function App() {
     setIsEditingClue(false);
 
     // Update player
-    const updated = players.map((p) =>
-      p.id === currentActiveId
-        ? { ...p, clue: formattedClue, hasSubmittedClue: true, isReady: true }
-        : p
-    );
+    const updated = players.map((p) => {
+      if (p.id === currentActiveId) {
+        if (p.forgedBy || p.id === forgedTargetPlayerId || p.id === pendingClueForgedRef.current?.targetPlayerId) {
+          return {
+            ...p,
+            originalClue: formattedClue,
+            clue: pendingClueForgedRef.current?.newClue || p.clue || formattedClue,
+            hasSubmittedClue: true,
+            isReady: true,
+          };
+        }
+        return { ...p, clue: formattedClue, hasSubmittedClue: true, isReady: true };
+      }
+      return p;
+    });
     setPlayers(updated);
     setClueInput('');
 
@@ -945,6 +998,14 @@ export default function App() {
       const existingClues = prev.filter((p) => p.hasSubmittedClue && p.clue && p.clue.trim()).map((p) => p.clue);
       const updated = prev.map((p) => {
         if (p.hasSubmittedClue && p.clue && p.clue.trim()) return p;
+        if (p.id === pendingClueForgedRef.current?.targetPlayerId || p.id === forgedTargetPlayerId) {
+          return {
+            ...p,
+            clue: pendingClueForgedRef.current?.newClue || p.clue,
+            hasSubmittedClue: true,
+            isReady: true,
+          };
+        }
         const fallback = p.isHuman
           ? (p.role === 'fox' ? 'Wild' : (secretWord || 'Hint'))
           : generateBotClue(p, activeCat, secretWord, existingClues, settings.foxSeeOneClueEarly);
@@ -1008,11 +1069,19 @@ export default function App() {
             settings.foxSeeOneClueEarly
           );
 
-          const nextPlayers = prev.map((p) =>
-            p.id === bot.id
-              ? { ...p, clue: sanitizeClue(botClue), hasSubmittedClue: true, isReady: true }
-              : p
-          );
+          const isBotForged =
+            bot.id === pendingClueForgedRef.current?.targetPlayerId ||
+            bot.id === forgedTargetPlayerId;
+
+          const nextPlayers = prev.map((p) => {
+            if (p.id === bot.id) {
+              if (isBotForged) {
+                return { ...p, hasSubmittedClue: true, isReady: true };
+              }
+              return { ...p, clue: sanitizeClue(botClue), hasSubmittedClue: true, isReady: true };
+            }
+            return p;
+          });
 
           if (gameMode === 'room' && roomId) {
             socketClient.syncState(roomId, { players: nextPlayers });
@@ -1074,14 +1143,19 @@ export default function App() {
  
     // Silently execute Chameleon Forgery if one was planned!
     const pending = pendingClueForgedRef.current;
+    const targetForgedId = pending?.targetPlayerId || forgedTargetPlayerId;
+    const forgedText = pending?.newClue;
+
     let finalWithForgedClues = verifiedPlayers;
-    if (pending) {
+    if (targetForgedId && forgedText) {
       finalWithForgedClues = verifiedPlayers.map((p) =>
-        p.id === pending.targetPlayerId ? { ...p, clue: sanitizeClue(pending.newClue) } : p
+        p.id === targetForgedId
+          ? { ...p, clue: sanitizeClue(forgedText), hasSubmittedClue: true, isReady: true }
+          : p
       );
-      setForgedTargetPlayerId(pending.targetPlayerId);
-      setPendingClueForged(null);
-      pendingClueForgedRef.current = null;
+      setForgedTargetPlayerId(targetForgedId);
+    } else if (targetForgedId) {
+      setForgedTargetPlayerId(targetForgedId);
     }
 
     setPlayers(finalWithForgedClues);
@@ -1996,29 +2070,50 @@ export default function App() {
   const handleConfirmClueForgery = (targetPlayerId: string, newClue: string) => {
     sound.powerup();
 
-    // Deduct 1 ink_of_deceit
-    setPlayers((prev) =>
-      prev.map((p) => {
-        if (p.id === activePlayer.id) {
-          const nextInv = { ...(p.inventory || {}) };
-          if (nextInv['ink_of_deceit'] > 1) {
-            nextInv['ink_of_deceit'] -= 1;
-          } else {
-            delete nextInv['ink_of_deceit'];
-          }
-          return {
-            ...p,
-            inventory: nextInv,
-          };
-        }
-        return p;
-      })
-    );
+    const sanitizedForgedClue = sanitizeClue(newClue);
 
+    // Update players state immediately so Infiltrator can see the forged clue
+    const updated = players.map((p) => {
+      if (p.id === activePlayer.id) {
+        const nextInv = { ...(p.inventory || {}) };
+        if (nextInv['ink_of_deceit'] > 1) {
+          nextInv['ink_of_deceit'] -= 1;
+        } else {
+          delete nextInv['ink_of_deceit'];
+        }
+        return {
+          ...p,
+          inventory: nextInv,
+        };
+      }
+      if (p.id === targetPlayerId) {
+        return {
+          ...p,
+          originalClue: p.originalClue || p.clue || '',
+          clue: sanitizedForgedClue,
+          forgedBy: activePlayer.id,
+          hasSubmittedClue: true,
+          isReady: true,
+        };
+      }
+      return p;
+    });
+
+    setPlayers(updated);
     setHasUsedPotionThisTurn(true);
-    setPendingClueForged({ targetPlayerId, newClue });
-    pendingClueForgedRef.current = { targetPlayerId, newClue };
+    setPendingClueForged({ targetPlayerId, newClue: sanitizedForgedClue });
+    pendingClueForgedRef.current = { targetPlayerId, newClue: sanitizedForgedClue };
+    setForgedTargetPlayerId(targetPlayerId);
     setIsClueForgeryModalOpen(false);
+
+    if (gameMode === 'room' && roomId) {
+      socketClient.syncState(roomId, {
+        players: updated,
+        forgedTargetPlayerId: targetPlayerId,
+        pendingClueForged: { targetPlayerId, newClue: sanitizedForgedClue },
+      });
+      broadcastState('clue_submission', updated);
+    }
 
     // Sneaky visual bubble strictly on Chameleon only
     setRecentlyUsedPotionPlayerId(activePlayer.id);
@@ -2030,7 +2125,7 @@ export default function App() {
 
     // Chameleon stealth toast (strictly Chameleon eyes)
     setActivePotionToast({
-      message: 'Ink of Deceit activated: clue forgery prepared silently for voting!',
+      message: `Ink of Deceit active: forged clue "${sanitizedForgedClue}" applied!`,
       icon: '✒️',
       style: 'purple',
       isChameleonOnly: true,
@@ -2537,9 +2632,48 @@ export default function App() {
             >
               {/* Middle content area: Left column table + 4x4 grid (scrollable on mobile) */}
               <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                {/* Mobile/iPhone View Switcher: Quick toggle between 4x4 Board and Players/Clues */}
+                <div className="lg:hidden sticky top-0 z-10 mb-3 flex items-center bg-slate-900/95 p-1 rounded-xl border border-slate-700/80 shadow-md backdrop-blur-md">
+                  <button
+                    type="button"
+                    onClick={() => setMobileGameTab('board')}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-display font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                      mobileGameTab === 'board'
+                        ? 'bg-emerald-500 text-slate-950 shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Grid3X3 className="w-3.5 h-3.5" />
+                    <span>4×4 Board</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileGameTab('clues')}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-display font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                      mobileGameTab === 'clues'
+                        ? 'bg-emerald-500 text-slate-950 shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Clues ({players.filter((p) => p.hasSubmittedClue).length}/{players.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileGameTab('both')}
+                    className={`py-1.5 px-2.5 rounded-lg text-[11px] font-display font-bold uppercase tracking-wider transition-all ${
+                      mobileGameTab === 'both'
+                        ? 'bg-slate-700 text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    Both
+                  </button>
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start pb-2">
                   {/* LEFT COLUMN: Player & Clue Table (expanded to 7 cols on lg/xl for full clue visibility) */}
-                  <div className="lg:col-span-7 flex flex-col">
+                  <div className={`lg:col-span-7 flex flex-col ${mobileGameTab === 'board' ? 'hidden lg:flex' : 'flex'}`}>
                     <LeftColumnTable
                       players={players}
                       activePlayerId={activePlayer.id}
@@ -2564,7 +2698,7 @@ export default function App() {
                   </div>
 
                   {/* RIGHT COLUMN: 4x4 Grid Card & Banners (5 cols on lg/xl) */}
-                  <div className="lg:col-span-5 flex flex-col">
+                  <div className={`lg:col-span-5 flex flex-col ${mobileGameTab === 'clues' ? 'hidden lg:flex' : 'flex'}`}>
                     <RightColumnGrid
                       key={`${activePlayer.id}-${gamePhase}`}
                       category={category}
@@ -2625,6 +2759,7 @@ export default function App() {
                   roundNumber={roundNumber}
                   isHost={isHost}
                   gameMode={gameMode}
+                  forgedTargetPlayerId={forgedTargetPlayerId}
                 />
               </div>
             </motion.div>
@@ -2733,18 +2868,6 @@ export default function App() {
         onUpdateBoost={handleUpdateInfiltratorBoost}
         onClose={() => setIsInfiltratorBoosterModalOpen(false)}
       />
-
-      {/* CREATOR FOOTER REFERENCE */}
-      <footer id="app-creator-footer" className="w-full max-w-7xl mx-auto px-4 py-3.5 text-center border-t border-slate-800/80 mt-auto">
-        <p className="text-xs text-slate-400 font-medium tracking-wide flex items-center justify-center gap-1.5 flex-wrap">
-          <span>Created by</span>
-          <span className="font-bold text-amber-300 font-display uppercase tracking-wider bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/80">
-            Ayaan Khan
-          </span>
-          <span className="text-slate-500">•</span>
-          <span className="text-slate-400">The Infiltrator Social Deduction Game</span>
-        </p>
-      </footer>
     </div>
   );
 }

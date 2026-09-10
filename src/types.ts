@@ -36,6 +36,8 @@ export interface Player {
   isMuted?: boolean;
   role: PlayerRole;
   clue: string;
+  originalClue?: string;
+  forgedBy?: string;
   hasSubmittedClue: boolean;
   votedForId: string | null;
   isReady: boolean;

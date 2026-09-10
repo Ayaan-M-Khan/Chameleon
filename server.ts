@@ -490,6 +490,25 @@ app.delete('/api/rooms/:roomId/players/:playerId', (req, res) => {
   res.json({ success: true, room });
 });
 
+// Leave room endpoint (called on tab close via sendBeacon or fetch)
+app.post('/api/rooms/:roomId/leave', (req, res) => {
+  const { roomId } = req.params;
+  let playerId = req.body?.playerId;
+  if (!playerId && typeof req.body === 'string') {
+    try {
+      const parsed = JSON.parse(req.body);
+      playerId = parsed.playerId;
+    } catch {
+      // ignore
+    }
+  }
+  if (roomId && playerId) {
+    clearDisconnectTimer(roomId, playerId);
+    removePlayerFromRoom(roomId, playerId);
+  }
+  res.json({ success: true });
+});
+
 // Kick off HTTP server & WebSockets
 async function startServer() {
   const server = http.createServer(app);
@@ -756,7 +775,7 @@ async function startServer() {
       });
       broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
 
-      // Start 60-second grace timer. If they reconnect within 60s, timer is cancelled.
+      // Short 2-second grace period for rapid page reloads; if tab was closed, remove permanently.
       clearDisconnectTimer(roomId, playerId);
       const timerKey = `${roomId}:${playerId}`;
       const timer = setTimeout(() => {
@@ -765,10 +784,10 @@ async function startServer() {
         if (!currentRoom) return;
         const targetPlayer = currentRoom.players.find((p) => p.id === playerId);
         if (targetPlayer && targetPlayer.isDisconnected) {
-          console.log(`Grace period (60s) expired for player ${playerId} in room ${roomId}. Removing permanently.`);
+          console.log(`Player ${playerId} disconnected (tab closed) in room ${roomId}. Removing immediately.`);
           removePlayerFromRoom(roomId, playerId);
         }
-      }, 60000);
+      }, 2000);
 
       disconnectTimers.set(timerKey, timer);
     });

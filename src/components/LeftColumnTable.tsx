@@ -476,10 +476,16 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
           <tbody className="divide-y divide-slate-800 font-medium">
             {players.map((p) => {
               const isCurrent = p.id === activePlayerId;
+              const isForgedByActiveImpostor =
+                isImpostor &&
+                (p.id === forgedTargetPlayerId ||
+                  p.id === pendingClueForged?.targetPlayerId ||
+                  p.forgedBy === activePlayerId);
+
               // During voting/resolution, any submitted non-empty clue is considered present
               const hasClue = isVotingOrResolution
-                ? Boolean(p.clue && p.clue.trim() !== '')
-                : Boolean(p.clue && p.hasSubmittedClue);
+                ? Boolean((p.clue && p.clue.trim() !== '') || (isForgedByActiveImpostor && pendingClueForged?.newClue))
+                : Boolean((p.clue && p.hasSubmittedClue) || isForgedByActiveImpostor);
               const isImpostorPeekTarget = isImpostor && p.id === impostorPeekPlayerId;
               const isClueLensTarget = isImpostor && p.id === clueLensPeekPlayerId;
 
@@ -487,12 +493,21 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
               // 1. Voting/Resolution: all clues are 100% public to all players!
               // 2. Clue submission:
               //    - Current active player always sees their own clue
+              //    - Infiltrator ALWAYS sees the clue they forged for any player!
               //    - Imposter (Infiltrator) sees exactly ONE other player's clue at random (+ 2nd clue if Clue Lens active)
               //    - Innocents see NO other players' clues
               const isClueVisible =
                 isVotingOrResolution ||
                 isCurrent ||
+                isForgedByActiveImpostor ||
                 (gamePhase === 'clue_submission' && (isImpostorPeekTarget || isClueLensTarget));
+
+              const displayedClue =
+                isCurrent && gamePhase === 'clue_submission' && p.originalClue
+                  ? p.originalClue
+                  : isForgedByActiveImpostor && pendingClueForged?.targetPlayerId === p.id && pendingClueForged.newClue
+                  ? pendingClueForged.newClue
+                  : p.clue;
 
               // Voting indicator logic
               const votedTarget = players.find(target => target.id === p.votedForId);
@@ -614,27 +629,29 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                       isClueVisible ? (
                         <div
                           className={`w-full ${
-                            isImpostorPeekTarget && gamePhase === 'clue_submission'
+                            isForgedByActiveImpostor
+                              ? 'bg-purple-950/80 border-purple-400 text-purple-100 shadow-md ring-1 ring-purple-500/50'
+                              : isImpostorPeekTarget && gamePhase === 'clue_submission'
                               ? 'bg-purple-950/70 border-purple-500/80 text-purple-200 shadow-sm'
                               : isClueLensTarget && gamePhase === 'clue_submission'
                               ? 'bg-cyan-950/70 border-cyan-400/80 text-cyan-200 shadow-sm'
                               : 'bg-amber-950/50 border-amber-500/50 text-amber-200'
                           } border font-bold px-2.5 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-mono tracking-tight shadow-xs break-words [overflow-wrap:anywhere] [word-break:break-word] whitespace-normal leading-relaxed overflow-hidden`}
                         >
-                          "{p.clue}"
-                          {isImpostorPeekTarget && gamePhase === 'clue_submission' && (
+                          "{displayedClue}"
+                          {isForgedByActiveImpostor && (
+                            <span className="block mt-1 text-[10px] font-sans font-extrabold uppercase tracking-wider text-purple-300 flex items-center gap-1">
+                              ✒️ Forged by You
+                            </span>
+                          )}
+                          {isImpostorPeekTarget && gamePhase === 'clue_submission' && !isForgedByActiveImpostor && (
                             <span className="block mt-1 text-[10px] font-sans font-extrabold uppercase tracking-wider text-purple-300">
                               🕵️ Infiltrator Intel (1 Clue)
                             </span>
                           )}
-                          {isClueLensTarget && gamePhase === 'clue_submission' && (
+                          {isClueLensTarget && gamePhase === 'clue_submission' && !isForgedByActiveImpostor && (
                             <span className="block mt-1 text-[10px] font-sans font-extrabold uppercase tracking-wider text-cyan-300">
                               👁️ Clue Lens Intel (2nd Clue)
-                            </span>
-                          )}
-                          {isImpostor && forgedTargetPlayerId === p.id && isVotingOrResolution && (
-                            <span className="block mt-1 text-[10px] font-sans font-extrabold uppercase tracking-wider text-purple-300 flex items-center gap-1">
-                              ✒️ Forged by You
                             </span>
                           )}
                         </div>
@@ -651,27 +668,12 @@ export const LeftColumnTable: React.FC<LeftColumnTableProps> = ({
                         <span>Thinking...</span>
                       </div>
                     )}
-
-                    {/* Infiltrator sneaky preview of planned forgery during clue submission */}
-                    {isImpostor && pendingClueForged?.targetPlayerId === p.id && gamePhase === 'clue_submission' && (
-                      <div className="mt-1.5 p-1.5 bg-purple-950/90 border border-purple-400/80 rounded-lg text-[10px] text-purple-200 font-mono shadow-xs">
-                        <span className="font-extrabold text-purple-300 flex items-center gap-1">
-                          ✒️ Forgery Plotted:
-                        </span>
-                        <span className="italic block text-purple-100 truncate mt-0.5">
-                          "{pendingClueForged.newClue}"
-                        </span>
-                        <span className="text-[9px] text-purple-400 block font-sans font-bold mt-0.5">
-                          (Silently activates at voting)
-                        </span>
-                      </div>
-                    )}
                   </td>
 
                   {/* Ready (✓) - Strictly centered */}
                   <td className="py-3 px-1 sm:px-2 text-center align-middle whitespace-nowrap">
                     <div className="flex items-center justify-center">
-                      {p.hasSubmittedClue || p.isReady ? (
+                      {p.hasSubmittedClue || p.isReady || isForgedByActiveImpostor ? (
                         <motion.span
                           initial={{ scale: 0.6, rotate: -15 }}
                           animate={{ scale: 1, rotate: 0 }}

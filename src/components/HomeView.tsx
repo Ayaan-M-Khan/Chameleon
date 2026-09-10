@@ -148,8 +148,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     type="text"
                     value={createName}
                     onChange={(e) => setCreateName(e.target.value)}
+                    onBlur={() => {
+                      if (!createName.trim()) {
+                        setCreateName('Player 1');
+                      }
+                    }}
                     maxLength={20}
-                    placeholder="Enter your name..."
+                    placeholder="Player 1"
                     className="w-full px-4 py-3 bg-slate-900/90 border-2 border-slate-700 rounded-xl text-white placeholder:text-slate-500 font-medium focus:outline-hidden focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 text-sm"
                   />
                 </div>
@@ -407,8 +412,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     type="text"
                     value={joinName}
                     onChange={(e) => setJoinName(e.target.value)}
+                    onBlur={() => {
+                      if (!joinName.trim()) {
+                        setJoinName('Player');
+                      }
+                    }}
                     maxLength={20}
-                    placeholder="Enter your name..."
+                    placeholder="Player"
                     className="w-full px-4 py-3 bg-slate-900/90 border-2 border-slate-700 rounded-xl text-white placeholder:text-slate-500 font-medium focus:outline-hidden focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30 text-sm"
                   />
                 </div>
@@ -547,6 +557,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
       </div>
+
+      {/* CREATOR FOOTER REFERENCE (Appears only at the bottom of the page) */}
+      <footer id="app-creator-footer" className="w-full max-w-5xl mx-auto px-4 py-4 text-center border-t border-slate-800/80 mt-8 mb-2">
+        <p className="text-xs text-slate-400 font-medium tracking-wide flex items-center justify-center gap-1.5 flex-wrap">
+          <span>Created by</span>
+          <span className="font-bold text-amber-300 font-display uppercase tracking-wider bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/80 text-xs">
+            Ayaan Khan
+          </span>
+          <span className="text-slate-500">•</span>
+          <span className="text-slate-400">The Infiltrator Social Deduction Game</span>
+        </p>
+      </footer>
     </div>
   );
 };
