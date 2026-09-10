@@ -1,3 +1,11 @@
+// Global Process Error Shields: ensure unhandled rejections or exceptions never crash server
+process.on('uncaughtException', (err) => {
+  console.error('CRITICAL: Uncaught Server Exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('CRITICAL: Unhandled Promise Rejection:', reason);
+});
+
 import express from 'express';
 import http from 'http';
 import path from 'path';
@@ -169,12 +177,38 @@ interface ClientMeta {
 }
 const clients = new Map<WebSocket, ClientMeta>();
 
-// Broadcast helper to all clients in a specific room
+// Safe WebSocket Broadcasting: protect against disconnected or corrupted sockets
 function broadcastToRoom(roomId: string, message: any, excludeWs?: WebSocket) {
-  const payload = JSON.stringify(message);
-  for (const [ws, meta] of clients.entries()) {
-    if (meta.roomId === roomId && ws !== excludeWs && ws.readyState === WebSocket.OPEN) {
-      ws.send(payload);
+  if (!roomId) return;
+  const clientsInRoom = roomSubscriptions.get(roomId);
+  let payload: string;
+  try {
+    payload = JSON.stringify(message);
+  } catch (err) {
+    console.error('Error stringifying message for room broadcast:', err);
+    return;
+  }
+
+  if (clientsInRoom && clientsInRoom.size > 0) {
+    for (const client of clientsInRoom) {
+      if (client !== excludeWs && client.readyState === 1 /* WebSocket.OPEN */) {
+        try {
+          client.send(payload);
+        } catch (err) {
+          console.error('Error sending message to client in room:', err);
+        }
+      }
+    }
+  } else {
+    // Fallback iteration over registered clients
+    for (const [ws, meta] of clients.entries()) {
+      if (meta.roomId === roomId && ws !== excludeWs && ws.readyState === 1 /* WebSocket.OPEN */) {
+        try {
+          ws.send(payload);
+        } catch (err) {
+          console.error('Error sending message to client:', err);
+        }
+      }
     }
   }
 }
@@ -598,6 +632,12 @@ async function startServer() {
 
         if (data.type === 'JOIN_ROOM') {
           const { roomId, player, password } = data;
+          if (!roomId) {
+            try {
+              ws.send(JSON.stringify({ type: 'ERROR', message: 'Missing roomId' }));
+            } catch {}
+            return;
+          }
           meta.roomId = roomId;
           meta.playerId = player?.id;
 
@@ -668,6 +708,7 @@ async function startServer() {
               });
             }
           }
+          if (!Array.isArray(room.players)) room.players = [];
           room.lastActive = Date.now();
 
           // Send current state back to joining client
@@ -676,6 +717,12 @@ async function startServer() {
           broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room }, ws);
         } else if (data.type === 'RECONNECT_SESSION') {
           const { roomId, playerId, sessionToken } = data;
+          if (!roomId) {
+            try {
+              ws.send(JSON.stringify({ type: 'SESSION_RECONNECT_FAILED', reason: 'Missing roomId' }));
+            } catch {}
+            return;
+          }
           meta.roomId = roomId;
           meta.playerId = playerId;
 
@@ -688,6 +735,9 @@ async function startServer() {
           if (!room) {
             ws.send(JSON.stringify({ type: 'SESSION_RECONNECT_FAILED', reason: 'Room not found' }));
             return;
+          }
+          if (!Array.isArray(room.players)) {
+            room.players = [];
           }
 
           const player = (room.players || []).find((p) => p.id === playerId);
@@ -711,100 +761,140 @@ async function startServer() {
           // Notify all other clients in room
           broadcastToRoom(roomId, { type: 'PLAYER_RECONNECTED', playerId, room }, ws);
           broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room }, ws);
-        } else if (data.type === 'STATE_SYNC') {
+        } else if (data.type === 'STATE_SYNC' || data.type === 'SYNC_STATE') {
           const { roomId, updates } = data;
-          if (roomId && updates) {
-            const room = rooms.get(roomId);
-            if (room) {
-              if (Array.isArray(updates.players)) {
-                updates.players = updates.players.map((p: any, idx: number) => {
-                  const existing = (room.players || []).find((oldP) => oldP.id === p.id);
-                  const validName = p.name && p.name.trim().length > 0 ? p.name.trim() : (existing?.name && existing.name.trim().length > 0 ? existing.name.trim() : `Player ${idx + 1}`);
-                  return {
-                    ...(existing || {}),
-                    ...p,
-                    name: validName,
-                  };
-                });
-              }
+          if (!roomId) {
+            try {
+              ws.send(JSON.stringify({ type: 'ERROR', message: 'Missing roomId' }));
+            } catch {}
+            return;
+          }
+          const room = rooms.get(roomId);
+          if (!room) {
+            try {
+              ws.send(JSON.stringify({ type: 'ERROR', message: 'Room not found' }));
+            } catch {}
+            return;
+          }
+          if (!Array.isArray(room.players)) {
+            room.players = [];
+          }
 
-              // Reset single-round buffs and potion locks on new round
-              if (updates.gamePhase === 'clue_submission' && room.gamePhase !== 'clue_submission') {
-                if (Array.isArray(updates.players)) {
-                  updates.players = updates.players.map((p: any) => ({
-                    ...p,
-                    hasShield: false,
-                    shieldActive: false,
-                    hasUsedPotionThisTurn: false,
-                    scrambled: false,
-                    oracleRevealedRow: undefined,
-                    oracleRevealedCol: undefined,
-                    inkApplied: false,
-                    originalClue: undefined,
-                    forgedBy: undefined,
-                  }));
-                }
-              }
-
-              Object.assign(room, updates);
-              room.lastActive = Date.now();
-              broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+          if (updates) {
+            if (Array.isArray(updates.players)) {
+              updates.players = updates.players.map((p: any, idx: number) => {
+                const existing = (room.players || []).find((oldP) => oldP.id === p.id);
+                const validName = p.name && p.name.trim().length > 0 ? p.name.trim() : (existing?.name && existing.name.trim().length > 0 ? existing.name.trim() : `Player ${idx + 1}`);
+                return {
+                  ...(existing || {}),
+                  ...p,
+                  name: validName,
+                };
+              });
             }
+
+            // Reset single-round buffs and potion locks on new round
+            if (updates.gamePhase === 'clue_submission' && room.gamePhase !== 'clue_submission') {
+              if (Array.isArray(updates.players)) {
+                updates.players = updates.players.map((p: any) => ({
+                  ...p,
+                  hasShield: false,
+                  shieldActive: false,
+                  hasUsedPotionThisTurn: false,
+                  scrambled: false,
+                  oracleRevealedRow: undefined,
+                  oracleRevealedCol: undefined,
+                  inkApplied: false,
+                  originalClue: undefined,
+                  forgedBy: undefined,
+                }));
+              }
+            }
+
+            Object.assign(room, updates);
+            if (!Array.isArray(room.players)) room.players = [];
+            room.lastActive = Date.now();
+            broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
           }
         } else if (data.type === 'USE_POTION') {
           const { roomId, playerId, potionId, targetPlayerId, newClue, category, secretCoordinate } = data;
-          if (roomId) {
-            const room = rooms.get(roomId);
-            if (room && Array.isArray(room.players)) {
-              const sender = room.players.find((p) => p.id === playerId);
-              if (sender) {
-                sender.hasUsedPotionThisTurn = true;
-                if (sender.inventory && sender.inventory[potionId]) {
-                  sender.inventory[potionId] = Math.max(0, sender.inventory[potionId] - 1);
-                }
-              }
+          if (!roomId) {
+            try {
+              ws.send(JSON.stringify({ type: 'ERROR', message: 'Missing roomId' }));
+            } catch {}
+            return;
+          }
+          const room = rooms.get(roomId);
+          if (!room) {
+            try {
+              ws.send(JSON.stringify({ type: 'ERROR', message: 'Room not found' }));
+            } catch {}
+            return;
+          }
+          if (!Array.isArray(room.players)) {
+            room.players = [];
+          }
 
-              if (potionId === 'ink_of_deceit' && targetPlayerId && newClue) {
-                const target = room.players.find((p) => p.id === targetPlayerId);
-                if (target) {
-                  target.originalClue = target.originalClue || target.clue || '';
-                  target.clue = String(newClue).trim().slice(0, 30);
-                  target.hasSubmittedClue = true;
-                  target.forgedBy = playerId;
-                }
-              } else if (potionId === 'grid_scrambler') {
-                if (category) {
-                  room.category = category;
-                }
-                if (secretCoordinate) {
-                  room.secretCoordinate = secretCoordinate;
-                }
-              } else if (potionId === 'vote_shield') {
-                if (sender) {
-                  sender.hasShield = true;
-                }
-              }
-
-              room.lastActive = Date.now();
-              broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+          const sender = room.players.find((p) => p.id === playerId);
+          if (sender) {
+            sender.hasUsedPotionThisTurn = true;
+            if (sender.inventory && sender.inventory[potionId]) {
+              sender.inventory[potionId] = Math.max(0, sender.inventory[potionId] - 1);
             }
           }
-        } else if (data.type === 'UPDATE_SETTINGS') {
-          const { roomId, settings } = data;
-          if (roomId && settings) {
-            const room = rooms.get(roomId);
-            if (room) {
-              room.settings = { ...room.settings, ...settings };
-              room.lastActive = Date.now();
-              broadcastToRoom(roomId, { type: 'ROOM_SETTINGS_UPDATED', settings: room.settings, room });
+
+          if (potionId === 'ink_of_deceit' && targetPlayerId && newClue) {
+            const target = room.players.find((p) => p.id === targetPlayerId);
+            if (target) {
+              target.originalClue = target.originalClue || target.clue || '';
+              target.clue = String(newClue).trim().slice(0, 30);
+              target.hasSubmittedClue = true;
+              target.forgedBy = playerId;
             }
+          } else if (potionId === 'grid_scrambler') {
+            if (category) {
+              room.category = category;
+            }
+            if (secretCoordinate) {
+              room.secretCoordinate = secretCoordinate;
+            }
+          } else if (potionId === 'vote_shield') {
+            if (sender) {
+              sender.hasShield = true;
+            }
+          }
+
+          room.lastActive = Date.now();
+          broadcastToRoom(roomId, { type: 'ROOM_STATE_SYNC', room });
+        } else if (data.type === 'UPDATE_SETTINGS' || data.type === 'SETTINGS_UPDATE') {
+          const { roomId, settings } = data;
+          if (!roomId) {
+            try {
+              ws.send(JSON.stringify({ type: 'ERROR', message: 'Missing roomId' }));
+            } catch {}
+            return;
+          }
+          const room = rooms.get(roomId);
+          if (!room) {
+            try {
+              ws.send(JSON.stringify({ type: 'ERROR', message: 'Room not found' }));
+            } catch {}
+            return;
+          }
+          if (!Array.isArray(room.players)) {
+            room.players = [];
+          }
+          if (settings) {
+            room.settings = { ...room.settings, ...settings };
+            room.lastActive = Date.now();
+            broadcastToRoom(roomId, { type: 'ROOM_SETTINGS_UPDATED', settings: room.settings, room });
           }
         } else if (data.type === 'EMOJI_REACTION') {
           const { roomId, playerId, emoji } = data;
           const allowedEmojis = new Set(['🤨', '🚨', '🦎', '💀', '👏']);
           if (roomId === meta.roomId && playerId === meta.playerId && allowedEmojis.has(emoji)) {
             const room = rooms.get(roomId);
-            const sender = room?.players.find((p) => p.id === playerId);
+            const sender = room?.players?.find((p) => p.id === playerId);
             if (room && sender) {
               room.lastActive = Date.now();
               broadcastToRoom(roomId, {
@@ -824,28 +914,48 @@ async function startServer() {
           const { roomId, playerId } = data;
           meta.roomId = undefined;
           meta.playerId = undefined;
-          if (roomId && playerId) {
-            clearDisconnectTimer(roomId, playerId);
-            const room = rooms.get(roomId);
-            if (room) {
-              removePlayerFromRoom(roomId, playerId);
-            }
+          if (!roomId) return;
+          clearDisconnectTimer(roomId, playerId);
+          const room = rooms.get(roomId);
+          if (!room) {
+            try {
+              ws.send(JSON.stringify({ type: 'ERROR', message: 'Room not found' }));
+            } catch {}
+            return;
+          }
+          if (!Array.isArray(room.players)) {
+            room.players = [];
+          }
+          if (playerId) {
+            removePlayerFromRoom(roomId, playerId);
           }
         } else if (data.type === 'KICK_PLAYER') {
           const { roomId, playerId } = data;
-          if (roomId && playerId) {
+          if (!roomId) {
+            try {
+              ws.send(JSON.stringify({ type: 'ERROR', message: 'Missing roomId' }));
+            } catch {}
+            return;
+          }
+          const room = rooms.get(roomId);
+          if (!room) {
+            try {
+              ws.send(JSON.stringify({ type: 'ERROR', message: 'Room not found' }));
+            } catch {}
+            return;
+          }
+          if (!Array.isArray(room.players)) {
+            room.players = [];
+          }
+          if (playerId) {
             clearDisconnectTimer(roomId, playerId);
-            const room = rooms.get(roomId);
-            if (room) {
-              if (!Array.isArray(room.players)) room.players = [];
-              room.players = room.players.filter((p) => p.id !== playerId);
-              room.lastActive = Date.now();
-              if (room.players.length === 0) {
-                rooms.delete(roomId);
-              } else {
-                cleanupRoomAfterPlayerRemoval(room, playerId);
-                broadcastToRoom(roomId, { type: 'PLAYER_KICKED', kickedPlayerId: playerId, room });
-              }
+            room.players = room.players.filter((p) => p.id !== playerId);
+            room.lastActive = Date.now();
+            if (room.players.length === 0) {
+              rooms.delete(roomId);
+            } else {
+              cleanupRoomAfterPlayerRemoval(room, playerId);
+              broadcastToRoom(roomId, { type: 'PLAYER_KICKED', kickedPlayerId: playerId, room });
             }
           }
         }

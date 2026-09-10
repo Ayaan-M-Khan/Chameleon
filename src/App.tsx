@@ -35,6 +35,7 @@ import { ClueForgeryModal } from './components/ClueForgeryModal';
 import { SilencePotionModal } from './components/SilencePotionModal';
 import { InfiltratorBoosterModal } from './components/InfiltratorBoosterModal';
 import { HomeView } from './components/HomeView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { parseInviteUrl } from './utils/inviteUrl';
 import { socketClient } from './utils/socketClient';
 import { SocketConnectionState } from './utils/socketClient';
@@ -167,7 +168,7 @@ function sanitizePlayers(newPlayers: Player[], existingPlayers?: Player[]): Play
   });
 }
 
-export default function App() {
+function InfiltratorApp() {
   // Keep layouts usable when mobile browser chrome changes the visual viewport.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -342,14 +343,15 @@ export default function App() {
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
   // Active player is this client's player (or pass and play current turn)
-  const myPlayer = players.find((p) => p.id === myPlayerId) || players[0] || INITIAL_PLAYERS[0];
+  const safePlayers = (players || []).filter((p): p is Player => Boolean(p && p.id));
+  const myPlayer = safePlayers.find((p) => p.id === myPlayerId) || safePlayers[0] || INITIAL_PLAYERS[0];
   const activePlayer =
     gameMode === 'pass_and_play' && (gamePhase === 'clue_submission' || gamePhase === 'voting' || gamePhase === 'fox_guess')
-      ? players.filter((p) => p.isHuman)[passAndPlayIndex] || myPlayer
+      ? safePlayers.filter((p) => p.isHuman)[passAndPlayIndex] || myPlayer
       : myPlayer;
 
   const isHost =
-    players.find((p) => p.id === myPlayerId)?.isHost ?? (players[0]?.id === myPlayerId);
+    safePlayers.find((p) => p.id === myPlayerId)?.isHost ?? (safePlayers[0]?.id === myPlayerId);
 
   // Sync sound utility with state and initialize browser audio unlock listeners
   useEffect(() => {
@@ -417,12 +419,12 @@ export default function App() {
           setRoomId(event.room.id);
           roomIdRef.current = event.room.id;
           setGameMode('room');
-        } else if (event.room.id !== roomIdRef.current) {
+        } else if (!roomIdRef.current || (event.room.id && event.room.id !== roomIdRef.current)) {
           return;
         }
 
         // Verify this player hasn't left or been removed from the room
-        const amInRoom = event.room.players?.some((p) => p.id === myPlayerId);
+        const amInRoom = event.room.players?.some((p: any) => p && p.id === myPlayerId);
         if (!amInRoom) {
           return;
         }
@@ -430,40 +432,61 @@ export default function App() {
         const isNewRoundStarting =
           event.room.gamePhase === 'clue_submission' && gamePhaseRef.current !== 'clue_submission';
 
-        if (event.room.players) {
-          const sanitized = sanitizePlayers(event.room.players, playersRef.current);
-          setPlayers(sanitized);
+        if (Array.isArray(event.room.players)) {
+          const validList = event.room.players.filter(Boolean);
+          const sanitized = sanitizePlayers(validList, playersRef.current);
+          setPlayers((prev) => {
+            if (JSON.stringify(prev) === JSON.stringify(sanitized)) return prev;
+            return sanitized;
+          });
           if (isNewRoundStarting) {
             setActiveVoteShields([]);
             setHasUsedPotionThisTurn(false);
           } else {
-            const shielded = sanitized.filter((p: any) => p.hasShield).map((p) => p.id);
-            setActiveVoteShields(shielded);
+            const shielded = sanitized.filter((p: any) => p && p.hasShield).map((p: any) => p.id);
+            setActiveVoteShields((prev) => (JSON.stringify(prev) === JSON.stringify(shielded) ? prev : shielded));
           }
         }
-        if (event.room.settings) setSettings((prev) => ({ ...prev, ...event.room.settings }));
-        if (event.room.gamePhase) {
+        if (event.room.settings) {
+          setSettings((prev) => {
+            const next = { ...prev, ...event.room.settings };
+            if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+            return next;
+          });
+        }
+        if (event.room.gamePhase && event.room.gamePhase !== gamePhaseRef.current) {
           setGamePhase(event.room.gamePhase);
           gamePhaseRef.current = event.room.gamePhase;
         }
-        if (event.room.category) {
+        if (event.room.category && JSON.stringify(categoryRef.current) !== JSON.stringify(event.room.category)) {
           setCategory(event.room.category);
           categoryRef.current = event.room.category;
         }
-        if (event.room.secretCoordinate !== undefined) {
+        if (event.room.secretCoordinate !== undefined && JSON.stringify(secretCoordinateRef.current) !== JSON.stringify(event.room.secretCoordinate)) {
           setSecretCoordinate(event.room.secretCoordinate);
           secretCoordinateRef.current = event.room.secretCoordinate;
         }
-        if (event.room.foxPlayerId !== undefined) setFoxPlayerId(event.room.foxPlayerId);
-        if (event.room.roundResolution !== undefined) {
-          setRoundResolution(event.room.roundResolution);
-          if (event.room.roundResolution) setIsResolutionModalOpen(true);
+        if (event.room.foxPlayerId !== undefined) {
+          setFoxPlayerId((prev) => (prev === event.room.foxPlayerId ? prev : event.room.foxPlayerId));
         }
-        if (event.room.roundNumber !== undefined) setRoundNumber(event.room.roundNumber);
-        if (event.room.voteRound !== undefined) setVoteRound(event.room.voteRound);
-        if (event.room.suddenDeath !== undefined) setSuddenDeath(Boolean(event.room.suddenDeath));
+        if (event.room.roundResolution !== undefined) {
+          setRoundResolution((prev) => {
+            if (JSON.stringify(prev) === JSON.stringify(event.room.roundResolution)) return prev;
+            if (event.room.roundResolution) setIsResolutionModalOpen(true);
+            return event.room.roundResolution;
+          });
+        }
+        if (event.room.roundNumber !== undefined) {
+          setRoundNumber((prev) => (prev === event.room.roundNumber ? prev : event.room.roundNumber));
+        }
+        if (event.room.voteRound !== undefined) {
+          setVoteRound((prev) => (prev === event.room.voteRound ? prev : event.room.voteRound));
+        }
+        if (event.room.suddenDeath !== undefined) {
+          setSuddenDeath((prev) => (prev === Boolean(event.room.suddenDeath) ? prev : Boolean(event.room.suddenDeath)));
+        }
         if (event.room.forgedTargetPlayerId !== undefined) {
-          setForgedTargetPlayerId(event.room.forgedTargetPlayerId);
+          setForgedTargetPlayerId((prev) => (prev === event.room.forgedTargetPlayerId ? prev : event.room.forgedTargetPlayerId));
         }
         if (event.room.pendingClueForged !== undefined && !pendingClueForgedRef.current) {
           setPendingClueForged(event.room.pendingClueForged);
@@ -479,14 +502,21 @@ export default function App() {
         }, 3200);
       } else if (event.type === 'ROOM_SETTINGS_UPDATED' && event.settings) {
         if (event.room && event.room.id !== roomIdRef.current) return;
-        setSettings((prev) => ({ ...prev, ...event.settings }));
+        setSettings((prev) => {
+          const next = { ...prev, ...event.settings };
+          if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+          return next;
+        });
       } else if ((event.type === 'PLAYER_JOINED' || event.type === 'PLAYER_LEFT') && event.room) {
         if (event.room.id !== roomIdRef.current) return;
-        const amInRoom = event.room.players?.some((p) => p.id === myPlayerId);
+        const amInRoom = event.room.players?.some((p: any) => p && p.id === myPlayerId);
         if (!amInRoom) return;
-        if (event.room.players) {
-          const sanitized = sanitizePlayers(event.room.players, playersRef.current);
-          setPlayers(sanitized);
+        if (Array.isArray(event.room.players)) {
+          const sanitized = sanitizePlayers(event.room.players.filter(Boolean), playersRef.current);
+          setPlayers((prev) => {
+            if (JSON.stringify(prev) === JSON.stringify(sanitized)) return prev;
+            return sanitized;
+          });
         }
       } else if (event.type === 'PLAYER_KICKED') {
         if (event.kickedPlayerId === myPlayerId) {
@@ -2941,5 +2971,13 @@ export default function App() {
         onClose={() => setIsInfiltratorBoosterModalOpen(false)}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <InfiltratorApp />
+    </ErrorBoundary>
   );
 }

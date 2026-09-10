@@ -323,8 +323,13 @@ class RealtimeSocketClient {
   }
 
   public send(data: any) {
+    if (!data) return;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(data));
+      try {
+        this.ws.send(JSON.stringify(data));
+      } catch (err) {
+        console.error('Error sending message over WebSocket:', err);
+      }
     }
   }
 

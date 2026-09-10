@@ -148,17 +148,19 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const boostHandler = onUpdateInfiltratorBoost || onUpdateChameleonBoost;
   const [copiedCode, setCopiedCode] = React.useState(false);
   const [copiedInvite, setCopiedInvite] = React.useState(false);
-  const hasEmptyName = players.some((p) => !p.name || !p.name.trim());
-  const canStart = players.length >= 3 && !hasEmptyName;
+
+  const safePlayers = (players || []).filter((p): p is Player => Boolean(p && p.id));
+  const hasEmptyName = safePlayers.some((p) => !p.name || !p.name.trim());
+  const canStart = safePlayers.length >= 3 && !hasEmptyName;
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(roomId);
+    navigator.clipboard.writeText(roomId || '');
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2200);
   };
 
   const handleCopyInviteLink = () => {
-    const inviteUrl = buildRoomInviteUrl(roomId, settings.roomPassword);
+    const inviteUrl = buildRoomInviteUrl(roomId || '', settings?.roomPassword);
     navigator.clipboard.writeText(inviteUrl);
     setCopiedInvite(true);
     setTimeout(() => setCopiedInvite(false), 2200);
@@ -171,12 +173,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   };
 
   // Infiltrator odds calculation for lobby
-  const selfPlayer = players.find((p) => (myPlayerId ? p.id === myPlayerId : p.isHuman)) || players[0];
+  const selfPlayer = safePlayers.find((p) => (myPlayerId ? p.id === myPlayerId : p.isHuman)) || safePlayers[0];
   const ticketStats = React.useMemo(() => {
-    const list = players.map((p) => {
-      const boostGold = p.infiltratorBoostGold ?? p.chameleonBoostGold ?? 0;
+    const list = safePlayers.map((p, idx) => {
+      const boostGold = p?.infiltratorBoostGold ?? p?.chameleonBoostGold ?? 0;
       const tickets = 1 + Math.floor(boostGold / 50);
-      const isSelf = p.id === selfPlayer?.id;
+      const isSelf = p?.id === selfPlayer?.id;
       return { player: p, tickets, boostGold, isSelf };
     });
     const totalTickets = list.reduce((a, b) => a + b.tickets, 0);
@@ -185,7 +187,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
       percentage: totalTickets > 0 ? (item.tickets / totalTickets) * 100 : 0,
       totalTickets,
     }));
-  }, [players, selfPlayer]);
+  }, [safePlayers, selfPlayer]);
 
   const selfStats = ticketStats.find((s) => s.isSelf);
 
@@ -329,11 +331,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-emerald-400" />
                 <h2 className="font-display font-extrabold text-base sm:text-lg uppercase text-white">
-                  Player Roster ({players.length}/8)
+                  Player Roster ({safePlayers.length}/8)
                 </h2>
               </div>
 
-              {players.length < 8 && (
+              {safePlayers.length < 8 && (
                 <button
                   onClick={onAddBot}
                   className="retro-button px-2.5 py-1 bg-amber-400 hover:bg-amber-300 rounded-lg text-xs font-bold text-slate-950 flex items-center gap-1 cursor-pointer shadow-xs"
@@ -345,10 +347,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               )}
             </div>
 
-            {gameMode === 'room' && players.length === 1 && (
+            {gameMode === 'room' && safePlayers.length === 1 && (
               <div className="mb-3 p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-xs text-amber-200">
                 <span className="font-bold block text-amber-300 mb-1">Waiting for other players to join!</span>
-                Give your friend the room code <strong className="font-mono bg-slate-900 px-1.5 py-0.5 rounded text-white border border-amber-500/50">{roomId}</strong> or copy the invite link above. Need to start immediately? Click <strong>+ Add AI Bot</strong>!
+                Give your friend the room code <strong className="font-mono bg-slate-900 px-1.5 py-0.5 rounded text-white border border-amber-500/50">{roomId || ''}</strong> or copy the invite link above. Need to start immediately? Click <strong>+ Add AI Bot</strong>!
               </div>
             )}
 
@@ -357,13 +359,15 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             </p>
 
             <div className="space-y-2">
-              {players.map((p, index) => {
+              {safePlayers.map((p, index) => {
                 const isSelf = p.id === myPlayerId;
                 const canEditName = isSelf || gameMode === 'pass_and_play';
+                const playerName = p?.name || `Player ${index + 1}`;
+                const playerAvatar = p?.avatar || '🦎';
 
                 return (
                   <div
-                    key={p.id}
+                    key={p.id || index}
                     className={`flex items-center justify-between p-2.5 rounded-lg border-2 transition-all ${
                       isSelf
                         ? 'border-emerald-500/50 bg-slate-800/90 shadow-xs'
@@ -371,40 +375,40 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xl shrink-0">{p.avatar}</span>
+                      <span className="text-xl shrink-0">{playerAvatar}</span>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           {canEditName ? (
                             <EditablePlayerName
                               playerId={p.id}
-                              currentName={p.name}
+                              currentName={playerName}
                               onUpdateName={onUpdatePlayerName}
                             />
                           ) : (
                             <span className="font-bold text-xs sm:text-sm text-white px-1 break-words [overflow-wrap:anywhere] max-w-[140px] leading-tight select-none">
-                              {p.name}
+                              {playerName}
                             </span>
                           )}
 
-                          {p.isHost && (
+                          {p?.isHost && (
                             <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase shrink-0">
                               HOST
                             </span>
                           )}
-                          {isSelf && !p.isHost && (
+                          {isSelf && !p?.isHost && (
                             <span className="text-[10px] bg-emerald-500 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase shrink-0">
                               YOU
                             </span>
                           )}
                         </div>
                         <span className="text-[11px] text-slate-400 block px-1">
-                          {p.isHuman ? (isSelf ? 'You (Human)' : 'Human Player') : 'Smart AI Bot'}
+                          {p?.isHuman ? (isSelf ? 'You (Human)' : 'Human Player') : 'Smart AI Bot'}
                         </span>
                       </div>
                     </div>
 
                     {/* Remove button: In room mode ONLY the Host can kick; in local modes user can manage roster */}
-                    {((gameMode === 'room' ? isHost : isHost || !p.isHuman)) && players.length > 1 && !isSelf && (
+                    {((gameMode === 'room' ? isHost : isHost || !p?.isHuman)) && safePlayers.length > 1 && !isSelf && (
                       <button
                         onClick={() => onRemovePlayer(p.id)}
                         className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-slate-700/50 rounded transition-colors cursor-pointer"
@@ -752,8 +756,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               >
                 <Play className="w-5 h-5 fill-slate-950" />
                 <span>
-                  {players.length < 3
-                    ? `Need at least 3 players (${players.length}/3)`
+                  {safePlayers.length < 3
+                    ? `Need at least 3 players (${safePlayers.length}/3)`
                     : hasEmptyName
                     ? 'All players must have a name'
                     : 'Deal Cards & Start Round'}
